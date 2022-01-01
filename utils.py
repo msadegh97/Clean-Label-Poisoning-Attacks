@@ -115,6 +115,16 @@ def args_parser():
                         type = str,
                         default='last_layer',
                         choices=['last_layer', 'all_layer', 'from_scratch'])
+    parser.add_argument("--setting",
+                         type=str,
+                         default = 'Normal',
+                         choices=['Normal', 'Poison'],
+                        help='finetune by normal or poison data')
+
+    parser.add_argument("--seed",
+                        type=int,
+                        default=None,
+                        help="random seed")
 
 
 

@@ -64,10 +64,15 @@ if __name__ == '__main__':
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
+    #set seed
+    set_random_seed(se= args.seed)
 
     # model
     transform, model = gen_model(args, args.model, pretrained=args.pretrained)
 
     train_loader, val_loader, test_loader = gen_data(args=args, dataset=args.dataset, transform=transform)
 
+    if args.setting == 'Normal':
+        fine_tuning(args= args, model= model, train_loader= train_loader, validation_loader=val_loader, tuning_type=args.tuning_type, device= device)
+        #TODO 1- test_acc, save_model, early_stopping
 
