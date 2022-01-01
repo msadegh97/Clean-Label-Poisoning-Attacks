@@ -20,9 +20,9 @@ def args_parser():
     parser.add_argument(
         '--dataset',
         type=str,
-        default='CIFAR10',
-        choices=[''],
-        help='Select dataset (mutag, proteins)'
+        default='cifar10',
+        choices=['cifar10', 'cifar100', 'resnet18'],
+        help='Select dataset'
     )
 
     parser.add_argument(
@@ -41,7 +41,7 @@ def args_parser():
     )
 
     parser.add_argument(
-        'tuning_type',
+        '--tuning_type',
         type=str,
         default='last_layer',
         choices=['last_layer', 'all_layer', 'from_scratch']
@@ -71,12 +71,6 @@ def args_parser():
                         type=int,
                         default=200,
                         help='Maximum Iterations (default : 150)')
-
-    # config
-    parser.add_argument('--model',
-                        type=str,
-                        default='resnet50',
-                        help='select model Architecture')
     # experiment
     parser.add_argument('--experiment',
                         type=str,
@@ -111,10 +105,6 @@ def args_parser():
                         type= int,
                         default= 32,
                         help="batch_size")
-    parser.add_argument("tuning_type",
-                        type = str,
-                        default='last_layer',
-                        choices=['last_layer', 'all_layer', 'from_scratch'])
     parser.add_argument("--setting",
                          type=str,
                          default = 'Normal',
