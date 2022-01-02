@@ -135,7 +135,10 @@ def gen_model(args, architecture, dataset= None, pretrained=True, num_classes= 1
 
     if pretrained:
         if dataset == "imagenet":
-            model = timm.create_model(architecture, pretrained=True, num_classes= num_classes)
+            model = timm.create_model(architecture,
+                                      pretrained=True,
+                                      num_classes= num_classes)
+                                    #   checkpoint_path='/home/mlcysec_team003/Clean-Label-Poisoning-Attacks/checkpoints/')
 
             config = resolve_data_config({}, model=model)
             transform = create_transform(**config)
@@ -150,7 +153,7 @@ def gen_data(args, dataset, transform):
         all_train = torchvision.datasets.CIFAR10(root='./data', train=True,download=True, transform=transform)
         train_set, val_set = torch.utils.data.random_split(all_train,
                                                            [int(len(all_train) * 0.9), int(len(all_train) * 0.1)])
-        testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transforms)
+        testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
     else:
         raise ValueError('dataset is not available.')
 

@@ -16,6 +16,7 @@ def fine_tuning(args, model, train_loader, validation_loader, tuning_type, devic
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
     record_loss = 0
+    num_batch = len(train_loader)
     for epoch in range(args.epochs):
         for step, data in enumerate(train_loader):
             images, labels = data
@@ -35,20 +36,18 @@ def fine_tuning(args, model, train_loader, validation_loader, tuning_type, devic
             record_loss += loss.item()
 
 
-            #logging
-            if step % (len(train_loader/(args.batch_size)))== 79:
 
-                if args.wandb:
-                    wandb.log({"trian_loss": record_loss / len(record_loss),
-                               "validation_loss": accuracy(model, validation_loader, device=device),
-                               })
+        if args.wandb:
+            wandb.log({"trian_loss": record_loss / num_batch,
+                        "validation_loss": accuracy(model, validation_loader, device=device),
+                        })
 
-                else:
-                    print('[%d, %5d] loss: %.3f' %
-                          (epoch + 1, epoch + 1, record_loss / len(record_loss)))
-                    print(accuracy(model, validation_loader, device=device))
+        else:
+            print('[%d, %5d] loss: %.3f' %
+                    (epoch + 1, epoch + 1, record_loss / num_batch))
+            print(accuracy(model, validation_loader, device=device))
+        record_loss = 0.0
 
-                record_loss = 0.0
         if args.scheduler:
             scheduler.step()
 
@@ -69,16 +68,18 @@ if __name__ == '__main__':
 
 
     #wandb
+    os.environ['TORCH_HOME'] = '/home/mlcysec_team003/Clean-Label-Poisoning-Attacks/checkpoints/'
     if args.wandb:
-        os.environ['WANDB_API_KEY'] = args.wandb_key
-        os.environ['WANDB_CONFIG_DIR'] = '/home/mlcysec_team003/' #for docker
-        run = wandb.init(project="test", entity='CLEAN_Label_Poisoning_Attack' )
+        os.environ['WANDB_API_KEY'] = "7a44e6f35f9bf51e15cefc85c9c65093fc9c5d87"#args.wandb_key
+        os.environ['WANDB_CONFIG_DIR'] = "/home/mlcysec_team003/Clean-Label-Poisoning-Attacks/"  #for docker
+        run = wandb.init(project="test", entity='clean_label_poisoning_attack' )
         wandb.config.update(args)
 
     # model
     transform, model = gen_model(args=args, architecture=args.model, dataset=args.dataset, pretrained=args.pretrained)
-
-    train_loader, val_loader, test_loader = gen_data(args=args, dataset=args.dataset, transform=transform)
+    model = model.to(device)
+    #findtuning dataset loader
+    train_loader, val_loader, test_loader = gen_data(args=args, dataset=args.tuning_dataset, transform=transform)
 
     if args.setting == 'Normal':
         fine_tuning(args= args, model= model, train_loader= train_loader, validation_loader=val_loader, tuning_type=args.tuning_type, device= device)
