@@ -35,11 +35,28 @@ def fine_tuning(args, model, train_loader, validation_loader, tuning_type, devic
 
             record_loss += loss.item()
 
+        model.eval()
+        record_loss_val=0
+        for step, data in enumerate(validation_loader):
+            images, labels = data
+            images = images.to(device)
+            labels = labels.to(device)
+
+            out = model(images)
+            loss = criterion(out, labels)
+
+          
+            record_loss_val += loss.item()
+        
+
+
 
 
         if args.wandb:
             wandb.log({"trian_loss": record_loss / num_batch,
-                        "validation_loss": accuracy(model, validation_loader, device=device),
+                        "validation_loss": record_loss / len(validation_loader),
+                        "validation_acc": accuracy(model, validation_loader, device=device),
+                        "train_acc": accuracy(model,train_loader, device=device)
                         })
 
         else:
