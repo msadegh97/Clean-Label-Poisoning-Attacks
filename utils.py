@@ -24,7 +24,7 @@ def args_parser():
         '--dataset',
         type=str,
         default='imagenet',
-        choices=['imagenet', 'cifar100', ''],
+        choices=['imagenet', 'cifar100'],
         help='Select dataset'
     )
 
