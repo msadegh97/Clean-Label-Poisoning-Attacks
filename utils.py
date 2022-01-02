@@ -15,13 +15,13 @@ import wandb
 
 
 def args_parser():
-    parser = argparse.ArgumentParser(description='PyTorch GNN PROBING')
+    parser = argparse.ArgumentParser(description='PyTorch')
 
     parser.add_argument(
         '--dataset',
         type=str,
-        default='cifar10',
-        choices=['cifar10', 'cifar100', 'resnet18'],
+        default='imagenet',
+        choices=['imagenet', 'cifar100', ''],
         help='Select dataset'
     )
 
