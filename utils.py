@@ -1,4 +1,5 @@
 import argparse
+from typing import Dict
 import timm
 import urllib
 from PIL import Image
@@ -7,6 +8,8 @@ from timm.data.transforms_factory import create_transform
 import numpy as np
 import random
 import torch
+import torch.nn as nn
+from torch.utils.data import TensorDataset, DataLoader
 from torchvision.transforms import Normalize
 from torchvision import transforms
 import torchvision
@@ -131,25 +134,23 @@ def set_random_seed(se=None):
     torch.cuda.manual_seed_all(se)
 
 
-def gen_model(args, architecture, dataset= None, pretrained=True, num_classes= 10):
-
+def gen_model(args, architecture, dataset= None, pretrained=True, num_classes=10):
     if pretrained:
         if dataset == "imagenet":
-            model = timm.create_model(architecture,
-                                      pretrained=True,
-                                      num_classes= num_classes)
-                                    #   checkpoint_path='/home/mlcysec_team003/Clean-Label-Poisoning-Attacks/checkpoints/')
+            model = timm.create_model(architecture, pretrained=True, num_classes= num_classes)
+            penultimate_layer_feature_vector = nn.Sequential(*list(model.children())[:-1]).eval()
+            # for param in penultimate_layer_feature_vector.parameters():
+            #     param.requires_grad = False
 
             config = resolve_data_config({}, model=model)
             transform = create_transform(**config)
 
-            return transform, model
+            return transform, model, penultimate_layer_feature_vector
 
 
 
 def gen_data(args, dataset, transform):
     if dataset == 'cifar10':
-
         all_train = torchvision.datasets.CIFAR10(root='./data', train=True,download=True, transform=transform)
         train_set, val_set = torch.utils.data.random_split(all_train,
                                                            [int(len(all_train) * 0.9), int(len(all_train) * 0.1)])
@@ -157,6 +158,7 @@ def gen_data(args, dataset, transform):
     else:
         raise ValueError('dataset is not available.')
 
+    class_to_idx = all_train.class_to_idx
     trainloader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size,
                                               shuffle=True, num_workers=2)
     valloader = torch.utils.data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=2)
@@ -164,7 +166,7 @@ def gen_data(args, dataset, transform):
     testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
                                              shuffle=False, num_workers=2)
 
-    return trainloader, valloader, testloader
+    return trainloader, valloader, testloader, class_to_idx
 
 
 def accuracy(model, dataloader, device='cpu'):
@@ -184,6 +186,78 @@ def accuracy(model, dataloader, device='cpu'):
           correct += (predicted == labels).sum().item()
 
       return correct / total
+
+def generate_poisonous_instance(model,
+                               target_image: torch.Tensor,
+                               base_image: torch.Tensor,
+                               penultimate_layer_feature_vector: torch.Tensor,
+                               watermarking: bool = False,) -> torch.Tensor:
+    """creating a poisoned instance from (base, target) images"""
+    mean_tensor = torch.from_numpy(np.array([0.485, 0.456, 0.406]))
+    std_tensor = torch.from_numpy(np.array([0.229, 0.224, 0.225]))
+
+    unnormalized_base_instance = base_image.clone()
+    for i in range(3):
+        unnormalized_base_instance[:, i, :, :] *= std_tensor[i]
+        unnormalized_base_instance[:, i, :, :] += mean_tensor[i]
+
+    perturbed_instance = unnormalized_base_instance.clone()
+    target_features = penultimate_layer_feature_vector(target_image)
+
+    transforms_normalization = transforms.Compose([
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+
+    epsilon, alpha = 16 / 255, 0.05 / 255
+    for i in range(5000):
+        perturbed_instance.requires_grad = True
+
+        poison_instance = transforms_normalization(perturbed_instance)
+        poison_features = penultimate_layer_feature_vector(poison_instance)
+
+        feature_loss = nn.MSELoss()(poison_features, target_features)
+        image_loss = nn.MSELoss()(poison_instance, base_image)
+        loss = feature_loss + image_loss / 1e2
+        loss.backward()
+
+        signed_gradient = perturbed_instance.grad.sign()
+
+        perturbed_instance = perturbed_instance - alpha * signed_gradient
+        eta = torch.clamp(perturbed_instance - unnormalized_base_instance, -epsilon, epsilon)
+        perturbed_instance = torch.clamp(unnormalized_base_instance + eta, 0, 1).detach()
+
+        if i == 0 or (i + 1) % 1000 == 0:
+            print(f'Feature loss: {feature_loss}, Image loss: {image_loss}')
+    return transforms_normalization(perturbed_instance)
+
+def poison_data_generator(clean_dataloader: DataLoader,
+                          poison_instance: torch.Tensor,
+                          class_to_idx: Dict[str, int],
+                          poison_class_name: str) -> DataLoader:
+    """returning a new dataloader having both poisonous instances and normal ones included"""
+    # concatenating two pytorch dataloaders
+    class cat_dataloaders():
+        """Class to concatenate multiple dataloaders"""
+        def __init__(self, dataloaders):
+            self.dataloaders = dataloaders
+            self.loader_iter = []
+
+        def __iter__(self):
+            for data_loader in self.dataloaders:
+                self.loader_iter.append(iter(data_loader))
+            return self
+
+        def __next__(self):
+            out = []
+            for data_iter in self.loader_iter:
+                out.append(next(data_iter))
+            return tuple(out)
+
+    # creating poison dataset and dataloaders
+    poison_dataset = TensorDataset(poison_instance, torch.tensor([class_to_idx[poison_class_name]]))
+    poison_dataloader = DataLoader(poison_dataset)
+    return cat_dataloaders([clean_dataloader, poison_dataloader])
+
 
 
 
