@@ -255,3 +255,34 @@ def poison_data_generator(clean_dataloader: DataLoader,
     poison_dataset = TensorDataset(poison_instance, torch.tensor([class_to_idx[poison_class_name]]))
     poison_dataloader = DataLoader(poison_dataset)
     return cat_dataloaders([clean_dataloader, poison_dataloader])
+
+
+
+class EarlyStopping():
+
+    def __init__(self, patience=5, min_delta=0):
+
+
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
+        self.best_model = None
+    def __call__(self, val_loss, model):
+        if self.best_loss == None:
+            self.best_loss = val_loss
+            self.best_model = copy.deepcopy(model.state_dict())
+
+        elif self.best_loss - val_loss > self.min_delta:
+            self.best_loss = val_loss
+            self.best_model = copy.deepcopy(model.state_dict())
+            self.counter = 0
+
+        elif self.best_loss - val_loss < self.min_delta:
+
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+
+

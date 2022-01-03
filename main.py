@@ -7,6 +7,9 @@ from utils import *
 
 def fine_tuning(args, model, train_loader, validation_loader, tuning_type, device='cuda'):
 
+    if args.early_stopping:    
+        early_stop = EarlyStopping(patience=15, min_delta=0)
+
     param = model.get_classifier().parameters() if args.tuning_type == 'last_layer' else model.parameters()
 
     optimizer = torch.optim.SGD(param, lr=args.lr, weight_decay=5e-4)
@@ -46,10 +49,14 @@ def fine_tuning(args, model, train_loader, validation_loader, tuning_type, devic
 
 
             record_loss_val += loss.item()
+        
+        early_stop(record_loss_val/len(validation_loader), model)
+        if early_stop.early_stop == True:
+             break
 
         if args.wandb:
             wandb.log({"trian_loss": record_loss / num_batch,
-                        "validation_loss": record_loss / len(validation_loader),
+                        "validation_loss": record_loss_val / len(validation_loader),
                         "validation_acc": accuracy(model, validation_loader, device=device),
                         "train_acc": accuracy(model,train_loader, device=device)
                         })
@@ -119,7 +126,25 @@ if __name__ == '__main__':
 
     if args.setting == 'Normal':
         fine_tuning(args= args, model= model, train_loader= train_loader, validation_loader=val_loader, tuning_type=args.tuning_type, device= device)
-        #TODO 1- test_acc, save_model, early_stopping
+
     elif args.setting == 'Poison':
         fine_tuning(args= args, model= model, train_loader= poisonous_dataloader, validation_loader=val_loader, tuning_type=args.tuning_type, device= device)
 
+    # test acc
+    model.load_state_dict(early_stop.best_model)
+    model.eval()
+    test_acc = accuracy(model, test_loader, device= device)
+    if args.wandb : 
+        wandb.log({"test_acc": test_acc})
+    else:
+        print(f"test_acc:{test_acc}")
+
+
+
+    # save the checkpoint
+    if not os.path.exists(f'./checkpoints/seed_{args.seed}'):
+        os.makedirs(f'./checkpoints/seed_{args.seed}')
+
+    torch.save(model.state_dict(), f'checkpoints/seed_{args.seed}/{args.setting}_{args.dataset}_{args.tuning_dataset}_{wandb.run.name}')
+
+        
