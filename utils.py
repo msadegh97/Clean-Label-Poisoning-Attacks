@@ -2,6 +2,7 @@ import argparse
 import random
 import urllib
 from typing import Dict
+import copy
 
 import numpy as np
 import timm
