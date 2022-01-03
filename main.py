@@ -1,9 +1,8 @@
-import torch
-from utils import *
 import os
 
+import torch
 
-
+from utils import *
 
 
 def fine_tuning(args, model, train_loader, validation_loader, tuning_type, device='cuda'):
@@ -45,7 +44,7 @@ def fine_tuning(args, model, train_loader, validation_loader, tuning_type, devic
             out = model(images)
             loss = criterion(out, labels)
 
-          
+
             record_loss_val += loss.item()
 
         if args.wandb:
@@ -89,37 +88,38 @@ if __name__ == '__main__':
         wandb.config.update(args)
 
     # model
-    transform, model, penultimate_layer_feature_vector = gen_model(args=args, 
-                                                 architecture=args.model, 
-                                                 dataset=args.dataset, 
+    transform, model, penultimate_layer_feature_vector = gen_model(args=args,
+                                                 architecture=args.model,
+                                                 dataset=args.dataset,
                                                  pretrained=args.pretrained)
     model = model.to(device)
 
+    model = model.to(device)
     train_loader, val_loader, test_loader, class_to_idx = gen_data(args=args, dataset=args.tuning_dataset, transform=transform)
 
-    
-    # base and target instances
-    base_instance, target_instance = None, None
-    base_instance_name, target_instance_name = 'airplane', 'frog'
 
-    for inputs, labels in test_loader:
-        for i in range(inputs.shape[0]):
-            if labels[i] == class_to_idx[base_instance_name]:
-                base_instance = inputs[i].unsqueeze(0).to(device)
-            elif labels[i] == class_to_idx[target_instance_name]:
-                target_instance = inputs[i].unsqueeze(0).to(device)
 
-    # generating poisonous instance
-    poisonous_instance = generate_poisonous_instance(args.model, target_instance, base_instance, penultimate_layer_feature_vector)
-    # poisonous dataloader added to clean dataloader
-    poisonous_dataloader = poison_data_generator(train_loader, poisonous_instance, class_to_idx, base_instance_name)
+    if args.setting == "Poison":
+        # base and target instances
+        base_instance, target_instance = None, None
+        base_instance_name, target_instance_name = 'airplane', 'frog'
+
+        for inputs, labels in test_loader:
+            for i in range(inputs.shape[0]):
+                if labels[i] == class_to_idx[base_instance_name]:
+                    base_instance = inputs[i].unsqueeze(0).to(device)
+                elif labels[i] == class_to_idx[target_instance_name]:
+                    target_instance = inputs[i].unsqueeze(0).to(device)
+
+        # generating poisonous instance
+        poisonous_instance = generate_poisonous_instance(args.model, target_instance, base_instance, penultimate_layer_feature_vector)
+        # poisonous dataloader added to clean dataloader
+        poisonous_dataloader = poison_data_generator(train_loader, poisonous_instance, class_to_idx, base_instance_name)
+
 
     if args.setting == 'Normal':
         fine_tuning(args= args, model= model, train_loader= train_loader, validation_loader=val_loader, tuning_type=args.tuning_type, device= device)
         #TODO 1- test_acc, save_model, early_stopping
     elif args.setting == 'Poison':
         fine_tuning(args= args, model= model, train_loader= poisonous_dataloader, validation_loader=val_loader, tuning_type=args.tuning_type, device= device)
-
-    
-        
 
