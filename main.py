@@ -47,10 +47,6 @@ def fine_tuning(args, model, train_loader, validation_loader, tuning_type, devic
 
           
             record_loss_val += loss.item()
-        
-
-
-
 
         if args.wandb:
             wandb.log({"trian_loss": record_loss / num_batch,
@@ -97,6 +93,7 @@ if __name__ == '__main__':
                                                  architecture=args.model, 
                                                  dataset=args.dataset, 
                                                  pretrained=args.pretrained)
+    model = model.to(device)
 
     train_loader, val_loader, test_loader, class_to_idx = gen_data(args=args, dataset=args.tuning_dataset, transform=transform)
 
