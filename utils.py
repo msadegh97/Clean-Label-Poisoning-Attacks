@@ -119,6 +119,11 @@ def args_parser():
                         type=int,
                         default=None,
                         help="random seed")
+    parser.add_argument("--early_stopping",
+                        type= bool,
+                        default= True,
+                        help="earlystopping"
+                        )
 
 
 
