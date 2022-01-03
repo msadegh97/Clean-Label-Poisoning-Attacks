@@ -1,20 +1,21 @@
 import argparse
-from typing import Dict
-import timm
+import random
 import urllib
+from typing import Dict
+
+import numpy as np
+import timm
+import torch
+import torch.nn as nn
+import torchvision
 from PIL import Image
 from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
-import numpy as np
-import random
-import torch
-import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
-from torchvision.transforms import Normalize
+from torch.utils.data import DataLoader, TensorDataset
 from torchvision import transforms
-import torchvision
-import wandb
+from torchvision.transforms import Normalize
 
+import wandb
 
 
 def args_parser():
@@ -134,19 +135,15 @@ def set_random_seed(se=None):
     torch.cuda.manual_seed_all(se)
 
 
-def gen_model(args, architecture, dataset= None, pretrained=True, num_classes=10):
+def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10):
     if pretrained:
         if dataset == "imagenet":
             model = timm.create_model(architecture, pretrained=True, num_classes= num_classes)
             penultimate_layer_feature_vector = nn.Sequential(*list(model.children())[:-1]).eval()
-            # for param in penultimate_layer_feature_vector.parameters():
-            #     param.requires_grad = False
-
             config = resolve_data_config({}, model=model)
             transform = create_transform(**config)
 
             return transform, model, penultimate_layer_feature_vector
-
 
 
 def gen_data(args, dataset, transform):
@@ -230,6 +227,7 @@ def generate_poisonous_instance(model,
             print(f'Feature loss: {feature_loss}, Image loss: {image_loss}')
     return transforms_normalization(perturbed_instance)
 
+
 def poison_data_generator(clean_dataloader: DataLoader,
                           poison_instance: torch.Tensor,
                           class_to_idx: Dict[str, int],
@@ -257,13 +255,3 @@ def poison_data_generator(clean_dataloader: DataLoader,
     poison_dataset = TensorDataset(poison_instance, torch.tensor([class_to_idx[poison_class_name]]))
     poison_dataloader = DataLoader(poison_dataset)
     return cat_dataloaders([clean_dataloader, poison_dataloader])
-
-
-
-
-
-
-
-
-
-
