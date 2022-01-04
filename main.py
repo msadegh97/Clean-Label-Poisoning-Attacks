@@ -1,13 +1,14 @@
 import os
-import copy
 
 import torch
 
 from utils import *
 
 
-def fine_tuning(args, model, train_loader, validation_loader, tuning_type, early_stop= None, device='cuda'):
+def fine_tuning(args, model, train_loader, validation_loader, tuning_type, device='cuda'):
 
+    if args.early_stopping:    
+        early_stop = EarlyStopping(patience=15, min_delta=0)
 
     param = model.get_classifier().parameters() if args.tuning_type == 'last_layer' else model.parameters()
 
@@ -84,9 +85,6 @@ if __name__ == '__main__':
     #set seed
     set_random_seed(se=args.seed)
 
-    if args.early_stopping:    
-        early_stop = EarlyStopping(patience=15, min_delta=0)
-
 
     #wandb
     os.environ['TORCH_HOME'] = '/home/mlcysec_team003/Clean-Label-Poisoning-Attacks/checkpoints/'
@@ -127,10 +125,10 @@ if __name__ == '__main__':
 
 
     if args.setting == 'Normal':
-        fine_tuning(args= args, model= model, train_loader= train_loader, validation_loader=val_loader, tuning_type=args.tuning_type, early_stop=early_stop, device= device)
+        fine_tuning(args= args, model= model, train_loader= train_loader, validation_loader=val_loader, tuning_type=args.tuning_type, device= device)
 
     elif args.setting == 'Poison':
-        fine_tuning(args= args, model= model, train_loader= poisonous_dataloader, validation_loader=val_loader, tuning_type=args.tuning_type, early_stop=early_stop, device= device)
+        fine_tuning(args= args, model= model, train_loader= poisonous_dataloader, validation_loader=val_loader, tuning_type=args.tuning_type, device= device)
 
     # test acc
     model.load_state_dict(early_stop.best_model)
@@ -148,5 +146,3 @@ if __name__ == '__main__':
         os.makedirs(f'./checkpoints/seed_{args.seed}')
 
     torch.save(model.state_dict(), f'checkpoints/seed_{args.seed}/{args.setting}_{args.dataset}_{args.tuning_dataset}_{wandb.run.name}')
-
-        
