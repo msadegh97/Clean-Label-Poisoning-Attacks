@@ -73,7 +73,7 @@ def args_parser():
     parser.add_argument('--max_iter',
                         type=int,
                         default=200,
-                        help='Maximum Iterations (default : 150)')
+                        help='Maximum Iterations (default : 200)')
     # experiment
     parser.add_argument('--experiment',
                         type=str,
@@ -182,9 +182,11 @@ def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10)
 
 
 def gen_data(args, dataset, transform):
-    import torch.utils.data as data_utils
     if dataset == 'cifar10':
         all_train = torchvision.datasets.CIFAR10(root='./data', train=True,download=True, transform=transform)
+        # for debugging
+        # indices = np.arange(1000)
+        # tk_1k = torch.utils.data.Subset(all_train, indices)
         train_set, val_set = torch.utils.data.random_split(all_train,
                                                            [int(len(all_train) * 0.9), int(len(all_train) * 0.1)])
         testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
@@ -222,50 +224,26 @@ def accuracy(model, dataloader, device='cpu'):
     return correct / total * 100
 
 
-def generate_poisonous_instance(args,
-                               model,
-                               target_image: torch.Tensor,
-                               base_image: torch.Tensor,
-                               penultimate_layer_feature_vector: torch.Tensor,
-                               watermarking: bool = False,) -> torch.Tensor:
-    """creating a poisoned instance from (base, target) images"""
-
-    mean_tensor = torch.from_numpy(np.array([0.485, 0.456, 0.406]))
-    std_tensor = torch.from_numpy(np.array([0.229, 0.224, 0.225]))
-
-    unnormalized_base_instance = base_image.clone()
-    for i in range(3):
-        unnormalized_base_instance[:, i, :, :] *= std_tensor[i]
-        unnormalized_base_instance[:, i, :, :] += mean_tensor[i]
-
-    perturbed_instance = unnormalized_base_instance.clone()
-    target_features = penultimate_layer_feature_vector(target_image)
-
-    transforms_normalization = transforms.Compose([
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-
-    epsilon, alpha = 16 / 255, 0.05 / 255
-    for i in range(5000):
-        perturbed_instance.requires_grad = True
-
-        poison_instance = transforms_normalization(perturbed_instance)
-        poison_features = penultimate_layer_feature_vector(poison_instance)
-
-        feature_loss = nn.MSELoss()(poison_features, target_features)
-        image_loss = nn.MSELoss()(poison_instance, base_image)
-        loss = feature_loss + image_loss / 1e2
+def poisoning(args, model, feature_vector, base_instance, target_instance, iters, beta_0=0.25, lr=0.01):
+    x = base_instance
+    for iter in range(iters):
+        x.requires_grad = True
+        feature_vector.eval()
+        f_t = feature_vector(target_instance)
+        f_x = feature_vector(x)
+        # forward
+        diff = f_t - f_x
+        loss = torch.sum(torch.pow(diff, 2))
         loss.backward()
-
-        signed_gradient = perturbed_instance.grad.sign()
-
-        perturbed_instance = perturbed_instance - alpha * signed_gradient
-        eta = torch.clamp(perturbed_instance - unnormalized_base_instance, -epsilon, epsilon)
-        perturbed_instance = torch.clamp(unnormalized_base_instance + eta, 0, 1).detach()
-
-        if i == 0 or (i + 1) % 1000 == 0:
-            print(f'Feature loss: {feature_loss}, Image loss: {image_loss}')
-    return transforms_normalization(perturbed_instance)
+        if (iter+1) % 50 == 0:
+            print('epoch {}, loss = {}'.format(iter, loss.item()))
+        x_hat = x.clone()
+        x_hat -= lr*x.grad
+        # backward
+        beta = beta_0 * list(model.children())[-1].in_features**2/(3*32*32)**2
+        x = (x_hat + lr*beta*base_instance) / (1 + lr*beta)
+        x = x.detach()
+    return x
 
 
 def poison_data_generator(args,
