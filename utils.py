@@ -92,7 +92,7 @@ def args_parser():
 
     parser.add_argument("--wandb_name",
                         type=str,
-                        default="test",
+                        default="poisoning",
                         help="wandb project name")
 
     parser.add_argument("--pretrained",
@@ -166,7 +166,7 @@ def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10)
             else:
                 raise ValueError('model is not available for imagenet.')
 
-        elif dataset == "cifar100":
+        elif dataset == "cifar100":  # TODO checkpoint cifar 100
             if f"cifar100_{architecture}" in torch.hub.list("chenyaofo/pytorch-cifar-models"):
                 model = torch.hub.load("chenyaofo/pytorch-cifar-models", f"cifar100_{architecture}", pretrained=True)
                 penultimate_layer_feature_vector = nn.Sequential(*list(model.children())[:-1]).eval()
