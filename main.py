@@ -6,10 +6,10 @@ from utils import *
 
 
 def fine_tuning(args, model, train_loader, validation_loader, tuning_type, early_stop=None, device='cuda'):
-    if args.early_stop:
+    if args.early_stopping:
         early_stop = EarlyStopping(patience=15, min_delta=0)
 
-    param = list(model.children())[-1].parameters() if args.tuning_type == 'last_layer' else model.parameters()
+    param = model.get_classifier().parameters() if args.tuning_type == 'last_layer' else model.parameters()
 
     optimizer = torch.optim.SGD(param, lr=args.lr, weight_decay=5e-4)
     criterion = torch.nn.CrossEntropyLoss()
@@ -83,7 +83,7 @@ if __name__ == '__main__':
 
     #set seed
     set_random_seed(se=args.seed)
-    if args.early_stop:
+    if args.early_stopping:
         early_stop = EarlyStopping(patience=15, min_delta=0)
 
         # wandb
@@ -107,12 +107,13 @@ if __name__ == '__main__':
         # base and target instances
         base_instance, target_instances = None, []
         base_instance_name, target_instance_name = 'dog', 'frog'
+        base_instance_label, target_instance_label = class_to_idx[base_instance_name], class_to_idx[target_instance_name]
         n_poisons = 0
-        for inputs, labels in test_loader:
+        for inputs, labels in test_loader:  # TODO check dataset train or test
             for i in range(inputs.shape[0]):
-                if labels[i] == class_to_idx[base_instance_name]:
+                if labels[i] == base_instance_label:
                     base_instance = inputs[i].unsqueeze(0).to(device)
-                elif labels[i] == class_to_idx[target_instance_name]:
+                elif labels[i] == target_instance_label:
                     target_instances.append(inputs[i].unsqueeze(0).to(device))
                     n_poisons += 1
                     if n_poisons == args.budgets:
@@ -122,12 +123,33 @@ if __name__ == '__main__':
         # generating poisonous instance
         poisonous_instances = []
         for target_instance in target_instances:
-            poisonous_instances.append(generate_poisonous_instance(args, args.model, target_instance, base_instance, penultimate_layer_feature_vector))
+            poisonous_instances.append(poisoning(args,
+                                                 model,
+                                                 penultimate_layer_feature_vector,
+                                                 base_instance,
+                                                 target_instance,
+                                                 iters=args.max_iter, beta_0=0.25, lr=0.01))
         # poisonous dataloader added to clean dataloader
-        poisonous_dataloader = poison_data_generator(args, train_loader, poisonous_instances, class_to_idx, base_instance_name)
+        poisonous_dataloader, poisons = poison_data_generator(args, train_loader, poisonous_instances, class_to_idx, base_instance_name)
 
         # log images
         logging_images(base_instance, target_instances, poisonous_instances)
+
+        # fine tune
+        fine_tuning(args=args,
+                    model=model,
+                    train_loader=poisonous_dataloader,
+                    validation_loader=val_loader,
+                    tuning_type=args.tuning_type,
+                    early_stop=early_stop,
+                    device=device)
+
+        # get success rate
+        success_rate = success_rate(model, poisons, base_instance_label, device=device)
+        if args.wandb:
+            wandb.log({"success_rate": success_rate})
+        else:
+            print(f"success_rate:{success_rate}")
 
     if args.setting == 'Normal':
         fine_tuning(args=args,
@@ -138,19 +160,10 @@ if __name__ == '__main__':
                     early_stop=early_stop,
                     device=device)
 
-    elif args.setting == 'Poison':
-        fine_tuning(args=args,
-                    model=model,
-                    train_loader=poisonous_dataloader,
-                    validation_loader=val_loader,
-                    tuning_type=args.tuning_type,
-                    early_stop=early_stop,
-                    device=device)
-
     # test acc
     model.load_state_dict(early_stop.best_model)
     model.eval()
-    test_acc = accuracy(model, test_loader, device= device)
+    test_acc = accuracy(model, test_loader, device=device)
     if args.wandb :
         wandb.log({"test_acc": test_acc})
     else:

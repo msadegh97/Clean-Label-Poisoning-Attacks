@@ -224,6 +224,26 @@ def accuracy(model, dataloader, device='cpu'):
     return correct / total * 100
 
 
+def success_rate(model, poison_dataloader, poison_label, device='cpu'):
+    correct = 0
+    total = 0
+    model.eval()
+    with torch.no_grad():
+        for data in poison_dataloader:
+            images, labels = data
+            labels = labels.to(device)
+            images = images.to(device)
+
+            outputs = model(images)
+
+            # predicted = torch.argmax(outputs.data, 1)
+            _, preds = torch.max(outputs, 1)
+            total += labels.size(0)
+            correct += torch.sum(preds == poison_label)
+
+    return correct / total * 100
+
+
 def poisoning(args, model, feature_vector, base_instance, target_instance, iters, beta_0=0.25, lr=0.01):
     x = base_instance
     for iter in range(iters):
@@ -240,7 +260,7 @@ def poisoning(args, model, feature_vector, base_instance, target_instance, iters
         x_hat = x.clone()
         x_hat -= lr*x.grad
         # backward
-        beta = beta_0 * list(model.children())[-1].in_features**2/(3*32*32)**2
+        beta = beta_0 * list(model.children())[-1].in_features**2/(3*32*32)**2  # TODO update size
         x = (x_hat + lr*beta*base_instance) / (1 + lr*beta)
         x = x.detach()
     return x
@@ -262,11 +282,11 @@ def poison_data_generator(args,
     if args.budgets == 1:
         poison_dataset = TensorDataset(poison_instance[0], torch.tensor([class_to_idx[poison_class_name]]))
 
-    else:
+    else:  # TODO add different poison instances
         poison_dataset = TensorDataset(torch.cat(poison_instance, dim=0), torch.tensor(args.budgets*[class_to_idx[poison_class_name]]))
 
     poison_dataloader = DataLoader(poison_dataset)
-    return itr_merge(clean_dataloader, poison_dataloader)
+    return itr_merge(clean_dataloader, poison_dataloader), poison_dataloader
 
 
 def logging_images(base_image, target_images, poisonous_images):
