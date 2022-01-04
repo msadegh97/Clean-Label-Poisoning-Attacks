@@ -1,6 +1,6 @@
 import argparse
+import copy
 import random
-import urllib
 from typing import Dict
 
 import numpy as np
@@ -8,12 +8,11 @@ import timm
 import torch
 import torch.nn as nn
 import torchvision
-from PIL import Image
 from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
 from torch.utils.data import DataLoader, TensorDataset
 from torchvision import transforms
-from torchvision.transforms import Normalize
+from torchvision.utils import make_grid
 
 import wandb
 
@@ -63,9 +62,7 @@ def args_parser():
         choices=['cifar10', 'tinyimagenet']
     )
 
-
     # Optimizer
-
     parser.add_argument('--lr',
                         type=float,
                         default=0.001,
@@ -80,7 +77,6 @@ def args_parser():
                         type=str,
                         default='posioning',
                         help='experiment name')
-
     # logger
     parser.add_argument("--wandb",
                         type=bool,
@@ -101,14 +97,17 @@ def args_parser():
                         type = bool,
                         default= True,
                         help= "on/off scheduler")
+
     parser.add_argument("--epochs",
                         type = int,
                         default=200,
                         help="num of finetuning iterations")
+
     parser.add_argument("--batch_size",
                         type= int,
                         default= 32,
                         help="batch_size")
+
     parser.add_argument("--setting",
                          type=str,
                          default = 'Normal',
@@ -120,10 +119,13 @@ def args_parser():
                         default=None,
                         help="random seed")
 
-
+    parser.add_argument("--early_stopping",
+                        type= bool,
+                        default= True,
+                        help="earlystopping"
+                        )
 
     args = parser.parse_args()
-
     return args
 
 
@@ -140,6 +142,8 @@ def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10)
         if dataset == "imagenet":
             model = timm.create_model(architecture, pretrained=True, num_classes= num_classes)
             penultimate_layer_feature_vector = nn.Sequential(*list(model.children())[:-1]).eval()
+            for param in penultimate_layer_feature_vector.parameters():
+                param.requires_grad = False
             config = resolve_data_config({}, model=model)
             transform = create_transform(**config)
 
@@ -147,6 +151,7 @@ def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10)
 
 
 def gen_data(args, dataset, transform):
+    import torch.utils.data as data_utils
     if dataset == 'cifar10':
         all_train = torchvision.datasets.CIFAR10(root='./data', train=True,download=True, transform=transform)
         train_set, val_set = torch.utils.data.random_split(all_train,
@@ -167,29 +172,33 @@ def gen_data(args, dataset, transform):
 
 
 def accuracy(model, dataloader, device='cpu'):
-  correct = 0
-  total = 0
-  model.eval()
-  with torch.no_grad():
-      for data in dataloader:
-          images, labels = data
-          labels = labels.to(device)
-          images = images.to(device)
+    correct = 0
+    total = 0
+    model.eval()
+    with torch.no_grad():
+        for data in dataloader:
+            images, labels = data
+            labels = labels.to(device)
+            images = images.to(device)
 
-          outputs = model(images)
+            outputs = model(images)
 
-          predicted = torch.argmax(outputs.data, 1)
-          total += labels.size(0)
-          correct += (predicted == labels).sum().item()
+            # predicted = torch.argmax(outputs.data, 1)
+            _, preds = torch.max(outputs, 1)
+            total += labels.size(0)
+            correct += torch.sum(preds == labels.data)
 
-      return correct / total
+    return correct / total * 100
 
-def generate_poisonous_instance(model,
+
+def generate_poisonous_instance(args,
+                               model,
                                target_image: torch.Tensor,
                                base_image: torch.Tensor,
                                penultimate_layer_feature_vector: torch.Tensor,
                                watermarking: bool = False,) -> torch.Tensor:
     """creating a poisoned instance from (base, target) images"""
+
     mean_tensor = torch.from_numpy(np.array([0.485, 0.456, 0.406]))
     std_tensor = torch.from_numpy(np.array([0.229, 0.224, 0.225]))
 
@@ -228,47 +237,55 @@ def generate_poisonous_instance(model,
     return transforms_normalization(perturbed_instance)
 
 
-def poison_data_generator(clean_dataloader: DataLoader,
+def poison_data_generator(args,
+                          clean_dataloader: DataLoader,
                           poison_instance: torch.Tensor,
                           class_to_idx: Dict[str, int],
                           poison_class_name: str) -> DataLoader:
     """returning a new dataloader having both poisonous instances and normal ones included"""
     # concatenating two pytorch dataloaders
-    class cat_dataloaders():
-        """Class to concatenate multiple dataloaders"""
-        def __init__(self, dataloaders):
-            self.dataloaders = dataloaders
-            self.loader_iter = []
-
-        def __iter__(self):
-            for data_loader in self.dataloaders:
-                self.loader_iter.append(iter(data_loader))
-            return self
-
-        def __next__(self):
-            out = []
-            for data_iter in self.loader_iter:
-                out.append(next(data_iter))
-            return tuple(out)
+    def itr_merge(*itrs):
+        for itr in itrs:
+            for v in itr:
+                yield v
 
     # creating poison dataset and dataloaders
-    poison_dataset = TensorDataset(poison_instance, torch.tensor([class_to_idx[poison_class_name]]))
-    poison_dataloader = DataLoader(poison_dataset)
-    return cat_dataloaders([clean_dataloader, poison_dataloader])
+    if args.budgets == 1:
+        poison_dataset = TensorDataset(poison_instance[0], torch.tensor([class_to_idx[poison_class_name]]))
 
+    else:
+        poison_dataset = TensorDataset(torch.cat(poison_instance, dim=0), torch.tensor(args.budgets*[class_to_idx[poison_class_name]]))
+
+    poison_dataloader = DataLoader(poison_dataset)
+    return itr_merge(clean_dataloader, poison_dataloader)
+
+
+def logging_images(base_image, target_images, poisonous_images):
+    base_grid = make_grid([base_image])
+    if len(target_images) == 1:
+        target_grid = make_grid([target_images])
+    else:
+        target_grid = make_grid(torch.cat(target_images, dim=0))
+    if len(poisonous_images) == 1:
+        poisonous_grid = make_grid([poisonous_images])
+    else:
+        poisonous_grid = make_grid(torch.cat(poisonous_images, dim=0))
+    # Log the image
+    wandb.log({"base_image": [wandb.Image(base_grid, caption="Base Image")]})
+    wandb.log({"target_images": [wandb.Image(target_grid, caption="Target Images")]})
+    wandb.log({"poisonous_images": [wandb.Image(poisonous_grid, caption="Poisonous Images")]})
 
 
 class EarlyStopping():
 
     def __init__(self, patience=5, min_delta=0):
-
-
         self.patience = patience
         self.min_delta = min_delta
         self.counter = 0
         self.best_loss = None
         self.early_stop = False
         self.best_model = None
+
     def __call__(self, val_loss, model):
         if self.best_loss == None:
             self.best_loss = val_loss
@@ -280,9 +297,6 @@ class EarlyStopping():
             self.counter = 0
 
         elif self.best_loss - val_loss < self.min_delta:
-
             self.counter += 1
             if self.counter >= self.patience:
                 self.early_stop = True
-
-
