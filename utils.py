@@ -53,7 +53,8 @@ def args_parser():
         '--model',
         type=str,
         default='resnet18',
-        choices=['resnet18', 'resnet50', 'mobilenet', 'inception']
+        choices=['resnet18', 'resnet50', 'mobilenet', 'inception', 'efficientnet_b0'
+                'resnet20', 'resnet56', 'vgg11_bn', 'vgg16_bn', 'mobilenetv2_x1_4']
     )
     parser.add_argument(
         '--tuning_dataset',
@@ -85,8 +86,13 @@ def args_parser():
 
     parser.add_argument("--wandb_key",
                         type=str,
-                        default="",
+                        default="7a44e6f35f9bf51e15cefc85c9c65093fc9c5d87",
                         help="enter your wandb key if you didn't set on your os")
+
+    parser.add_argument("--wandb_name",
+                        type=str,
+                        default="test",
+                        help="wandb project name")
 
     parser.add_argument("--pretrained",
                         type = bool,
@@ -124,6 +130,10 @@ def args_parser():
                         default= True,
                         help="earlystopping"
                         )
+    parser.add_argument("--checkpoints_path",
+                        type=str,
+                        default='/home/mlcysec_team003/Clean-Label-Poisoning-Attacks/checkpoints/',
+                        help="where to save checkpoints path")
 
     args = parser.parse_args()
     return args

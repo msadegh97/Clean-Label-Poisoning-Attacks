@@ -86,12 +86,12 @@ if __name__ == '__main__':
     if args.early_stopping:
         early_stop = EarlyStopping(patience=15, min_delta=0)
 
-    #wandb
-    os.environ['TORCH_HOME'] = 'checkpoints/'
+        # wandb
+    os.environ['TORCH_HOME'] = args.checkpoints_path
     if args.wandb:
-        os.environ['WANDB_API_KEY'] = "7a44e6f35f9bf51e15cefc85c9c65093fc9c5d87" #args.wandb_key
-        os.environ['WANDB_CONFIG_DIR'] = "/home/mlcysec_team003/Clean-Label-Poisoning-Attacks/" #for docker
-        run = wandb.init(project="test", entity='clean_label_poisoning_attack')
+        os.environ['WANDB_API_KEY'] = args.wandb_key
+        os.environ['WANDB_CONFIG_DIR'] = "/home/mlcysec_team003/Clean-Label-Poisoning-Attacks/"  # for docker
+        run = wandb.init(project=args.wandb_name, entity='clean_label_poisoning_attack')
         wandb.config.update(args)
 
     # model
