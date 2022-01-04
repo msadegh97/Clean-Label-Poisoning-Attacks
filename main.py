@@ -128,6 +128,7 @@ if __name__ == '__main__':
                                                  penultimate_layer_feature_vector,
                                                  base_instance,
                                                  target_instance,
+                                                 device=device,
                                                  iters=args.max_iter, beta_0=0.25, lr=0.01))
         # poisonous dataloader added to clean dataloader
         poisonous_dataloader, poisons = poison_data_generator(args, train_loader, poisonous_instances, class_to_idx, base_instance_name)

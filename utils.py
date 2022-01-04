@@ -233,7 +233,9 @@ def success_rate(model, poison_dataloader, poison_label, device='cpu'):
     return correct / total * 100
 
 
-def poisoning(args, model, feature_vector, base_instance, target_instance, iters, beta_0=0.25, lr=0.01):
+def poisoning(args, model, feature_vector, base_instance, target_instance, iters, device, beta_0=0.25, lr=0.01):
+    base_instance, target_instance, feature_vector = base_instance.to(device), target_instance.to(
+        device), feature_vector.to(device)
     x = base_instance
     for iter in range(iters):
         x.requires_grad = True
