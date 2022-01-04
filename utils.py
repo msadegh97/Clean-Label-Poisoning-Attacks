@@ -32,8 +32,8 @@ def args_parser():
     parser.add_argument(
         '--budgets',
         type=int,
-        default=5,
-        choices=[5, 25, 50 , 100],
+        default=1,
+        choices=[1, 5, 10, 25, 50, 100],
         help='number of poison sample'
     )
 
