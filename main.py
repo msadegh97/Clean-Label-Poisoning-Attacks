@@ -6,10 +6,10 @@ from utils import *
 
 
 def fine_tuning(args, model, train_loader, validation_loader, tuning_type, early_stop=None, device='cuda'):
-    if args.early_stopping:
+    if args.early_stop:
         early_stop = EarlyStopping(patience=15, min_delta=0)
 
-    param = model.get_classifier().parameters() if args.tuning_type == 'last_layer' else model.parameters()
+    param = list(model.children())[-1].parameters() if args.tuning_type == 'last_layer' else model.parameters()
 
     optimizer = torch.optim.SGD(param, lr=args.lr, weight_decay=5e-4)
     criterion = torch.nn.CrossEntropyLoss()
@@ -83,7 +83,7 @@ if __name__ == '__main__':
 
     #set seed
     set_random_seed(se=args.seed)
-    if args.early_stopping:
+    if args.early_stop:
         early_stop = EarlyStopping(patience=15, min_delta=0)
 
         # wandb
