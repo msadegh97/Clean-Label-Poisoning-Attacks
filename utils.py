@@ -74,11 +74,6 @@ def args_parser():
                         type=int,
                         default=200,
                         help='Maximum Iterations (default : 200)')
-    # experiment
-    parser.add_argument('--experiment',
-                        type=str,
-                        default='posioning',
-                        help='experiment name')
     # logger
     parser.add_argument("--wandb",
                         type=bool,
@@ -129,12 +124,6 @@ def args_parser():
                         type= bool,
                         default= True,
                         help="early stopping"
-                        )
-
-    parser.add_argument("--early_stopping",
-                        type= bool,
-                        default= True,
-                        help="earlystopping"
                         )
     parser.add_argument("--checkpoints_path",
                         type=str,
