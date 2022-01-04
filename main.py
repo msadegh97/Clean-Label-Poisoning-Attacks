@@ -122,7 +122,12 @@ if __name__ == '__main__':
         # generating poisonous instance
         poisonous_instances = []
         for target_instance in target_instances:
-            poisonous_instances.append(generate_poisonous_instance(args, args.model, target_instance, base_instance, penultimate_layer_feature_vector))
+            poisonous_instances.append(poisoning(args,
+                                                 model,
+                                                 penultimate_layer_feature_vector,
+                                                 base_instance,
+                                                 target_instance,
+                                                 iters=args.max_iter, beta_0=0.25, lr=0.01))
         # poisonous dataloader added to clean dataloader
         poisonous_dataloader = poison_data_generator(args, train_loader, poisonous_instances, class_to_idx, base_instance_name)
 
