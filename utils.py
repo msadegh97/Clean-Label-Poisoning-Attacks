@@ -54,7 +54,7 @@ def args_parser():
         '--model',
         type=str,
         default='resnet18',
-        choices=['resnet18', 'resnet50', 'mobilenet', 'inception', 'efficientnet_b0'
+        choices=['resnet18', 'resnet50', 'mobilenet', 'inception', 'efficientnet_b0',
                 'resnet20', 'resnet56', 'vgg11_bn', 'vgg16_bn', 'mobilenetv2_x1_4']
     )
     parser.add_argument(
@@ -125,10 +125,10 @@ def args_parser():
                         type=int,
                         default=None,
                         help="random seed")
-    parser.add_argument("--early_stopping",
+    parser.add_argument("--early_stop",
                         type= bool,
                         default= True,
-                        help="earlystopping"
+                        help="early stopping"
                         )
 
     parser.add_argument("--early_stopping",
