@@ -150,14 +150,29 @@ def set_random_seed(se=None):
 def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10):
     if pretrained:
         if dataset == "imagenet":
-            model = timm.create_model(architecture, pretrained=True, num_classes= num_classes)
-            penultimate_layer_feature_vector = nn.Sequential(*list(model.children())[:-1]).eval()
-            for param in penultimate_layer_feature_vector.parameters():
-                param.requires_grad = False
-            config = resolve_data_config({}, model=model)
-            transform = create_transform(**config)
+            if architecture in timm.list_models(pretrained=True):
+                model = timm.create_model(architecture, pretrained=True, num_classes= num_classes)
+                penultimate_layer_feature_vector = nn.Sequential(*list(model.children())[:-1]).eval()
+                for param in penultimate_layer_feature_vector.parameters():
+                    param.requires_grad = False
+                config = resolve_data_config({}, model=model)
+                transform = create_transform(**config)
+            else:
+                raise ValueError('model is not available for imagenet.')
 
-            return transform, model, penultimate_layer_feature_vector
+        elif dataset == "cifar100":
+            if f"cifar100_{architecture}" in torch.hub.list("chenyaofo/pytorch-cifar-models"):
+                model = torch.hub.load("chenyaofo/pytorch-cifar-models", f"cifar100_{architecture}", pretrained=True)
+                penultimate_layer_feature_vector = nn.Sequential(*list(model.children())[:-1]).eval()
+                for param in penultimate_layer_feature_vector.parameters():
+                    param.requires_grad = False
+                # mean, std from https://gist.github.com/weiaicunzai/e623931921efefd4c331622c344d8151
+                transform = transforms.Compose(
+                    [transforms.ToTensor(), transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))])
+            else:
+                raise ValueError('model is not available for Cifar100.')
+
+        return transform, model, penultimate_layer_feature_vector
 
 
 def gen_data(args, dataset, transform):
