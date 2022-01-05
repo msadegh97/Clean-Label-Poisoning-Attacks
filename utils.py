@@ -32,7 +32,7 @@ def args_parser():
     parser.add_argument(
         '--budgets',
         type=int,
-        default=1,
+        default=5,
         choices=[1, 5, 10, 25, 50, 100],
         help='number of poison sample'
     )
@@ -196,7 +196,6 @@ def gen_data(args, dataset, transform):
 def accuracy(model, dataloader, device='cpu'):
     correct = 0
     total = 0
-    model.eval()
     with torch.no_grad():
         for data in dataloader:
             images, labels = data
@@ -204,13 +203,11 @@ def accuracy(model, dataloader, device='cpu'):
             images = images.to(device)
 
             outputs = model(images)
-
-            # predicted = torch.argmax(outputs.data, 1)
             _, preds = torch.max(outputs, 1)
             total += labels.size(0)
-            correct += torch.sum(preds == labels.data)
+            correct += torch.sum(preds == labels)
 
-    return correct / total * 100
+        return correct / total * 100
 
 
 def success_rate(model, poison_dataloader, poison_label, device='cpu'):
@@ -247,7 +244,7 @@ def poisoning(args, model, feature_vector, base_instance, target_instance, iters
         loss = torch.sum(torch.pow(diff, 2))
         loss.backward()
         if (iter+1) % 50 == 0:
-            print('epoch {}, loss = {}'.format(iter, loss.item()))
+            print('iteration {}, loss = {}'.format(iter, loss.item()))
         x_hat = x.clone()
         x_hat -= lr*x.grad
         # backward

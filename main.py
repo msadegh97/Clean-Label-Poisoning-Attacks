@@ -16,9 +16,8 @@ def fine_tuning(args, model, train_loader, validation_loader, tuning_type, early
     if args.scheduler:
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
-    record_loss, num_items, correct = 0, 0, 0
-    # num_batch = len(train_loader)
     for epoch in range(args.epochs):
+        record_loss, num_items, correct = 0, 0, 0
         # training
         for step, data in enumerate(train_loader):
             images, labels = data
@@ -37,9 +36,9 @@ def fine_tuning(args, model, train_loader, validation_loader, tuning_type, early
 
             record_loss += loss.item() * labels.size(0)
             num_items += labels.size(0)
-            correct += torch.sum(preds == labels.data)
+            correct += preds.eq(labels).sum().item()
         # accuracy per epcoh
-        epoch_acc = correct / num_items * 100.
+        epoch_acc = 100.*correct/num_items
 
         # validation
         model.eval()
@@ -60,10 +59,10 @@ def fine_tuning(args, model, train_loader, validation_loader, tuning_type, early
             break
 
         if args.wandb:
-            wandb.log({"trian_loss": record_loss / num_items,
+            wandb.log({"train_loss": record_loss / num_items,
                         "validation_loss": record_loss_val / len(validation_loader),
                         "validation_acc": accuracy(model, validation_loader, device=device),
-                        "train_acc": epoch_acc.item()
+                        "train_acc": epoch_acc
                         })
 
         else:
