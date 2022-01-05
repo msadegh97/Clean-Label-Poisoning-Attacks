@@ -178,12 +178,12 @@ def gen_data(args, dataset, transform):
     if dataset == 'cifar10':
         all_train = CIFAR10(root='./data', train=True,download=True, transform=transform)
         if args.train_samples!=0:
-            all_train, _ = torch.utils.data.random_split(all_train,
+            all_train_, _ = torch.utils.data.random_split(all_train,
                                                             [args.train_samples, len(all_train) - args.train_samples])
 
 
-        train_set, val_set = torch.utils.data.random_split(all_train,
-                                                           [int(len(all_train) * 0.9), int(len(all_train) * 0.1)])
+        train_set, val_set = torch.utils.data.random_split(all_train_,
+                                                           [int(len(all_train_) * 0.9), int(len(all_train_) * 0.1)])
         testset = CIFAR10(root='./data', train=False, download=True, transform=transform)
     else:
         raise ValueError('dataset is not available.')
