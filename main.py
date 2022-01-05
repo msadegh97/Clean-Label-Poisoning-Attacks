@@ -6,7 +6,6 @@ from utils import *
 
 
 def fine_tuning(args, model, train_loader, validation_loader, tuning_type, early_stop=None, device='cuda'):
-
     param = model.get_classifier().parameters() if args.tuning_type == 'last_layer' else model.parameters()
 
     optimizer = torch.optim.SGD(param, lr=args.lr, weight_decay=5e-4)
@@ -21,7 +20,6 @@ def fine_tuning(args, model, train_loader, validation_loader, tuning_type, early
             images, labels = data
             images = images.to(device)
             labels = labels.to(device)
-
             model.train()
             optimizer.zero_grad()
 
@@ -35,9 +33,9 @@ def fine_tuning(args, model, train_loader, validation_loader, tuning_type, early
             record_loss += loss.item() * labels.size(0)
             num_items += labels.size(0)
             correct += preds.eq(labels).sum().item()
-        # accuracy per epcoh
-        epoch_acc = 100.*correct/num_items
 
+        # accuracy per epcoh
+        epoch_acc = 100*float(correct)/float(num_items)
         # validation
         model.eval()
         record_loss_val = 0
@@ -67,7 +65,6 @@ def fine_tuning(args, model, train_loader, validation_loader, tuning_type, early
             print('[%d, %5d] loss: %.3f' %
                     (epoch + 1, epoch + 1, record_loss / num_items))
             print(accuracy(model, validation_loader, device=device))
-        record_loss = 0.0
 
         if args.scheduler:
             scheduler.step()
@@ -83,7 +80,7 @@ if __name__ == '__main__':
     if args.early_stop:
         early_stop = EarlyStopping(patience=15, min_delta=0)
 
-        # wandb
+    # wandb
     os.environ['TORCH_HOME'] = args.checkpoints_path
     if args.wandb:
         os.environ['WANDB_API_KEY'] = args.wandb_key
@@ -98,7 +95,7 @@ if __name__ == '__main__':
                                                  pretrained=args.pretrained)
     model = model.to(device)
 
-    train_loader, val_loader, test_loader, class_to_idx = gen_data(args=args, dataset=args.tuning_dataset, transform=transform)
+    train_loader, val_loader, test_loader, train_set, class_to_idx = gen_data(args=args, dataset=args.tuning_dataset, transform=transform)
     if args.setting == "Poison":
         # base and target instances
         base_instance_name, target_instance_name = 'dog', 'frog'
@@ -119,7 +116,7 @@ if __name__ == '__main__':
                                                  device=device,
                                                  iters=args.max_iter, beta_0=0.25, lr=0.01))
         # poisonous dataloader added to clean dataloader
-        poisonous_dataloader, poisons = poison_data_generator(args, train_loader, poisonous_instances, class_to_idx, base_instance_name)
+        poisonous_dataloader, poisons = poison_data_generator(args, train_set, poisonous_instances, class_to_idx, base_instance_name)
 
         # log images
         logging_images(base_instance, target_instances, poisonous_instances)

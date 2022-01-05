@@ -2,7 +2,6 @@ import argparse
 import copy
 import random
 from typing import Dict
-import copy
 
 import numpy as np
 import timm
@@ -11,8 +10,9 @@ import torch.nn as nn
 import torchvision
 from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import ConcatDataset, DataLoader, Dataset, TensorDataset
 from torchvision import transforms
+from torchvision.datasets import CIFAR10
 from torchvision.utils import make_grid
 
 import wandb
@@ -172,25 +172,25 @@ def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10)
 
 def gen_data(args, dataset, transform):
     if dataset == 'cifar10':
-        all_train = torchvision.datasets.CIFAR10(root='./data', train=True,download=True, transform=transform)
+        all_train = CIFAR10(root='./data', train=True,download=True, transform=transform)
         # for debugging
         # indices = np.arange(1000)
         # tk_1k = torch.utils.data.Subset(all_train, indices)
         train_set, val_set = torch.utils.data.random_split(all_train,
                                                            [int(len(all_train) * 0.9), int(len(all_train) * 0.1)])
-        testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
+        testset = CIFAR10(root='./data', train=False, download=True, transform=transform)
     else:
         raise ValueError('dataset is not available.')
 
     class_to_idx = all_train.class_to_idx
-    trainloader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size,
+    trainloader = DataLoader(train_set, batch_size=args.batch_size,
                                               shuffle=True, num_workers=2)
-    valloader = torch.utils.data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=2)
+    valloader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=2)
 
-    testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
+    testloader = DataLoader(testset, batch_size=args.batch_size,
                                              shuffle=False, num_workers=2)
 
-    return trainloader, valloader, testloader, class_to_idx
+    return trainloader, valloader, testloader, train_set, class_to_idx
 
 
 def accuracy(model, dataloader, device='cpu'):
@@ -221,7 +221,7 @@ def success_rate(model, target_instances, poison_label):
             total += 1
             correct += torch.sum(preds == poison_label)
 
-    return correct / total * 100
+        return correct / total * 100
 
 def get_base_target_instances(args,
                               loader: DataLoader,
@@ -240,7 +240,7 @@ def get_base_target_instances(args,
                 target_instances.append(inputs[i].unsqueeze(0).to(device))
                 if len(target_instances) == args.budgets and len(base_instance) == 1:
                     break
-                    
+
     return base_instance, target_instances[:args.budgets]
 
 
@@ -269,26 +269,26 @@ def poisoning(args, model, feature_vector, base_instance, target_instance, iters
 
 
 def poison_data_generator(args,
-                          clean_dataloader: DataLoader,
+                          train_set: Dataset,
                           poison_instance: torch.Tensor,
                           class_to_idx: Dict[str, int],
                           poison_class_name: str) -> DataLoader:
     """returning a new dataloader having both poisonous instances and normal ones included"""
-    # concatenating two pytorch dataloaders
-    def itr_merge(*itrs):
-        for itr in itrs:
-            for v in itr:
-                yield v
 
     # creating poison dataset and dataloaders
     if args.budgets == 1:
-        poison_dataset = TensorDataset(poison_instance[0], torch.tensor([class_to_idx[poison_class_name]]))
+        poison_dataset = TensorDataset(poison_instance[0],
+                                       torch.tensor(args.budgets*[class_to_idx[poison_class_name]]))
 
     else:  # TODO add different poison instances
-        poison_dataset = TensorDataset(torch.cat(poison_instance, dim=0), torch.tensor(args.budgets*[class_to_idx[poison_class_name]]))
+        poison_dataset = TensorDataset(torch.cat(poison_instance, dim=0),
+                                       torch.tensor(args.budgets*[class_to_idx[poison_class_name]]))
 
-    poison_dataloader = DataLoader(poison_dataset)
-    return itr_merge(clean_dataloader, poison_dataloader), poison_dataloader
+    poison_dataloader = DataLoader(poison_dataset, batch_size=args.batch_size)
+    poisonous_clean_dataloader = DataLoader(ConcatDataset([train_set, poison_dataset]),
+                                            batch_size=args.batch_size)
+
+    return poisonous_clean_dataloader, poison_dataloader
 
 
 def logging_images(base_image, target_images, poisonous_images):
