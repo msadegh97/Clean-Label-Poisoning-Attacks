@@ -269,10 +269,11 @@ def poisoning(args, model, feature_vector, base_instance, target_instance, iters
 
 
 def poison_data_generator(args,
-                          train_set: Dataset,
-                          poison_instance: torch.Tensor,
-                          class_to_idx: Dict[str, int],
-                          poison_class_name: str) -> DataLoader:
+                          train_set,
+                          poison_instance,
+                          class_to_idx,
+                          poison_class_name,
+                          device):
     """returning a new dataloader having both poisonous instances and normal ones included"""
 
     # creating poison dataset and dataloaders
@@ -283,7 +284,7 @@ def poison_data_generator(args,
     else:  # TODO add different poison instances
         poison_dataset = TensorDataset(torch.cat(poison_instance, dim=0),
                                        torch.tensor(args.budgets*[class_to_idx[poison_class_name]]))
-
+    poison_dataset = poison_dataset.to(device)
     poison_dataloader = DataLoader(poison_dataset, batch_size=args.batch_size)
     poisonous_clean_dataloader = DataLoader(ConcatDataset([train_set, poison_dataset]),
                                             batch_size=args.batch_size)

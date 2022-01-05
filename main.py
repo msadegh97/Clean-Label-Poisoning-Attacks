@@ -116,7 +116,7 @@ if __name__ == '__main__':
                                                  device=device,
                                                  iters=args.max_iter, beta_0=0.25, lr=0.01))
         # poisonous dataloader added to clean dataloader
-        poisonous_dataloader, poisons = poison_data_generator(args, train_set, poisonous_instances, class_to_idx, base_instance_name)
+        poisonous_dataloader, poisons = poison_data_generator(args, train_set, poisonous_instances, class_to_idx, base_instance_name, device)
 
         # log images
         logging_images(base_instance, target_instances, poisonous_instances)
