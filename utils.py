@@ -278,13 +278,12 @@ def poison_data_generator(args,
 
     # creating poison dataset and dataloaders
     if args.budgets == 1:
-        poison_dataset = TensorDataset(poison_instance[0],
+        poison_dataset = TensorDataset(torch.tensor(poison_instance[0]).to("cpu"),
                                        torch.tensor(args.budgets*[class_to_idx[poison_class_name]]))
 
     else:  # TODO add different poison instances
-        poison_dataset = TensorDataset(torch.cat(poison_instance, dim=0),
+        poison_dataset = TensorDataset(torch.cat(poison_instance, dim=0).to("cpu"),
                                        torch.tensor(args.budgets*[class_to_idx[poison_class_name]]))
-    poison_dataset = poison_dataset.to(device)
     poison_dataloader = DataLoader(poison_dataset, batch_size=args.batch_size)
     poisonous_clean_dataloader = DataLoader(ConcatDataset([train_set, poison_dataset]),
                                             batch_size=args.batch_size)
