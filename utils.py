@@ -229,10 +229,30 @@ def success_rate(model, poison_dataloader, poison_label, device='cpu'):
 
     return correct / total * 100
 
+def get_base_target_instances(args,
+                              loader: DataLoader,
+                              base_instance_name: str,
+                              target_instance_name: str,
+                              class_to_idx: Dict[str, int],
+                              device):
+    """ getting base and target instances based on our budget"""
+    base_label, target_label = class_to_idx[base_instance_name], class_to_idx[target_instance_name]
+    base_instance, target_instances = torch.empty(0), []
+    for inputs, labels in loader:  # TODO check dataset train or test
+        for i in range(inputs.shape[0]):
+            if labels[i] == base_label:
+                base_instance = inputs[i].unsqueeze(0).to(device)
+            elif labels[i] == target_label:
+                target_instances.append(inputs[i].unsqueeze(0).to(device))
+                if len(target_instances) == args.budgets and len(base_instance) == 1:
+                    break
+        break
+    return base_instance, target_instances[:args.budgets]
+
 
 def poisoning(args, model, feature_vector, base_instance, target_instance, iters, device, beta_0=0.25, lr=0.01):
-    base_instance, target_instance, feature_vector = base_instance.to(device), target_instance.to(
-        device), feature_vector.to(device)
+    base_instance, target_instance = base_instance.to(device), target_instance.to(device)
+    feature_vector = feature_vector.to(device)
     x = base_instance
     for iter in range(iters):
         x.requires_grad = True
@@ -248,7 +268,7 @@ def poisoning(args, model, feature_vector, base_instance, target_instance, iters
         x_hat = x.clone()
         x_hat -= lr*x.grad
         # backward
-        beta = beta_0 * list(model.children())[-1].in_features**2/(3*32*32)**2  # TODO update size
+        beta = beta_0 * list(model.children())[-1].in_features**2/(base_instance.shape[1:].numel())**2
         x = (x_hat + lr*beta*base_instance) / (1 + lr*beta)
         x = x.detach()
     return x
@@ -280,11 +300,11 @@ def poison_data_generator(args,
 def logging_images(base_image, target_images, poisonous_images):
     base_grid = make_grid([base_image])
     if len(target_images) == 1:
-        target_grid = make_grid([target_images])
+        target_grid = make_grid(target_images)
     else:
         target_grid = make_grid(torch.cat(target_images, dim=0))
     if len(poisonous_images) == 1:
-        poisonous_grid = make_grid([poisonous_images])
+        poisonous_grid = make_grid(poisonous_images)
     else:
         poisonous_grid = make_grid(torch.cat(poisonous_images, dim=0))
     # Log the image

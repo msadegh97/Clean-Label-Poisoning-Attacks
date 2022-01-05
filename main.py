@@ -101,24 +101,15 @@ if __name__ == '__main__':
     model = model.to(device)
 
     train_loader, val_loader, test_loader, class_to_idx = gen_data(args=args, dataset=args.tuning_dataset, transform=transform)
-
     if args.setting == "Poison":
         # base and target instances
-        base_instance, target_instances = None, []
         base_instance_name, target_instance_name = 'dog', 'frog'
-        base_instance_label, target_instance_label = class_to_idx[base_instance_name], class_to_idx[target_instance_name]
-        n_poisons = 0
-        for inputs, labels in test_loader:  # TODO check dataset train or test
-            for i in range(inputs.shape[0]):
-                if labels[i] == base_instance_label:
-                    base_instance = inputs[i].unsqueeze(0).to(device)
-                elif labels[i] == target_instance_label:
-                    target_instances.append(inputs[i].unsqueeze(0).to(device))
-                    n_poisons += 1
-                    if n_poisons == args.budgets:
-                        break
-            break
-
+        base_instance, target_instances = get_base_target_instances(args,
+                                                                   test_loader,
+                                                                    base_instance_name,
+                                                                    target_instance_name,
+                                                                    class_to_idx,
+                                                                    device)
         # generating poisonous instance
         poisonous_instances = []
         for target_instance in target_instances:
@@ -145,7 +136,7 @@ if __name__ == '__main__':
                     device=device)
 
         # get success rate
-        success_rate = success_rate(model, poisons, base_instance_label, device=device)
+        success_rate = success_rate(model, poisons, class_to_idx[base_instance_name], device=device)
         if args.wandb:
             wandb.log({"success_rate": success_rate})
         else:
