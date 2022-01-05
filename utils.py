@@ -54,7 +54,7 @@ def args_parser():
         '--model',
         type=str,
         default='resnet18',
-        choices=['resnet18', 'resnet50', 'mobilenet', 'inception', 'efficientnet_b0',
+        choices=['resnet18', 'resnet50', 'mobilenet', 'inception', 'efficientnet_b0', 'vit_base_patch16_224',
                 'resnet20', 'resnet56', 'vgg11_bn', 'vgg16_bn', 'mobilenetv2_x1_4']
     )
     parser.add_argument(
