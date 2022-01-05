@@ -210,21 +210,15 @@ def accuracy(model, dataloader, device='cpu'):
         return correct / total * 100
 
 
-def success_rate(model, poison_dataloader, poison_label, device='cpu'):
+def success_rate(model, target_instances, poison_label):
     correct = 0
     total = 0
     model.eval()
     with torch.no_grad():
-        for data in poison_dataloader:
-            images, labels = data
-            labels = labels.to(device)
-            images = images.to(device)
-
-            outputs = model(images)
-
-            # predicted = torch.argmax(outputs.data, 1)
+        for target in target_instances:
+            outputs = model(target)
             _, preds = torch.max(outputs, 1)
-            total += labels.size(0)
+            total += 1
             correct += torch.sum(preds == poison_label)
 
     return correct / total * 100
