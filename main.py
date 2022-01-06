@@ -136,11 +136,11 @@ if __name__ == '__main__':
                     device=device)
 
         # get success rate
-        success_rate = success_rate(model, target_instances, class_to_idx[base_instance_name])
-        if args.wandb:
-            wandb.log({"success_rate": success_rate})
-        else:
-            print(f"success_rate:{success_rate}")
+        # success_rate = success_rate(model, target_instances, class_to_idx[base_instance_name])
+        # if args.wandb:
+        #     wandb.log({"success_rate": success_rate})
+        # else:
+        #     print(f"success_rate:{success_rate}")
 
     if args.setting == 'Normal':
         fine_tuning(args=args,

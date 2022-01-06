@@ -263,7 +263,7 @@ def poisoning(args, model, feature_vector, base_instance, target_instance, iters
         diff = f_t - f_x
         loss = torch.sum(torch.pow(diff, 2))
         loss.backward()
-        if (iter+1) % 50 == 0:
+        if (iter+1) % 100 == 0:
             print('iteration {}, loss = {}'.format(iter, loss.item()))
         x_hat = x.clone()
         x_hat -= lr*x.grad
