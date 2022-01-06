@@ -5,7 +5,7 @@ import torch
 from utils import *
 
 
-def fine_tuning(args, model, train_loader, validation_loader, tuning_type, early_stop=None, device='cuda'):
+def fine_tuning(args, model, train_loader, validation_loader, target_instances, poison_label, early_stop=None, device='cuda'):
     param = model.get_classifier().parameters() if args.tuning_type == 'last_layer' else model.parameters()
 
     optimizer = torch.optim.SGD(param, lr=args.lr, weight_decay=5e-4)
@@ -54,17 +54,21 @@ def fine_tuning(args, model, train_loader, validation_loader, tuning_type, early
         if early_stop.early_stop == True:
             break
 
-        if args.wandb:
-            wandb.log({"train_loss": record_loss / num_items,
+        to_log = {"train_loss": record_loss / num_items,
                         "validation_loss": record_loss_val / len(validation_loader),
                         "validation_acc": accuracy(model, validation_loader, device=device),
-                        "train_acc": epoch_acc
-                        })
+                        "train_acc": epoch_acc}
+        if args.setting == "Poison":
+            to_log["train_success_rate"] = success_rate(model, target_instances, poison_label)
 
+        if args.wandb:
+            wandb.log(to_log)
         else:
             print('[%d, %5d] loss: %.3f' %
                     (epoch + 1, epoch + 1, record_loss / num_items))
-            print(accuracy(model, validation_loader, device=device))
+            print('train acc: ', accuracy(model, validation_loader, device=device))
+            if args.setting == "Poison":
+                print('train success rate: ', success_rate(model, target_instances, poison_label))
 
         if args.scheduler:
             scheduler.step()
@@ -126,7 +130,8 @@ if __name__ == '__main__':
                     model=model,
                     train_loader=poisonous_dataloader,
                     validation_loader=val_loader,
-                    tuning_type=args.tuning_type,
+                    target_instances=target_instances,
+                    poison_label=class_to_idx[base_instance_name],
                     early_stop=early_stop,
                     device=device)
 
@@ -142,7 +147,8 @@ if __name__ == '__main__':
                     model=model,
                     train_loader=train_loader,
                     validation_loader=val_loader,
-                    tuning_type=args.tuning_type,
+                    target_instances=None,
+                    poison_label=None,
                     early_stop=early_stop,
                     device=device)
 

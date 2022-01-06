@@ -72,8 +72,8 @@ def args_parser():
 
     parser.add_argument('--max_iter',
                         type=int,
-                        default=200,
-                        help='Maximum Iterations (default : 200)')
+                        default=5000,
+                        help='Maximum Iterations (default : 5000)')
     # logger
     parser.add_argument("--wandb",
                         type=bool,
