@@ -60,7 +60,7 @@ def args_parser():
         '--model',
         type=str,
         default='resnet18',
-        choices=['resnet18', 'resnet50', 'mobilenet', 'inception', 'efficientnet_b0', 'vit_base_patch16_224',
+        choices=['resnet18', 'resnet50', 'mobilenetv2_100', 'inception_v4', 'efficientnet_b0', 'vit_base_patch16_224',
                 'resnet20', 'resnet56', 'vgg11_bn', 'vgg16_bn', 'mobilenetv2_x1_4']
     )
     parser.add_argument(
@@ -152,14 +152,31 @@ def set_random_seed(se=None):
     torch.cuda.manual_seed_all(se)
 
 
+class NeuralNetwork(nn.Module):
+    def __init__(self, architecture, num_classes):
+        super().__init__()
+
+        # load a pre-trained model for the feature extractor
+        model = timm.create_model(architecture, pretrained=True)
+        self.feature_extractor = nn.Sequential(*list(model.children())[:-1])
+        self.fc = nn.Linear(list(model.children())[-1].in_features, num_classes)
+
+        # fix the pre-trained network
+        for param in self.feature_extractor.parameters():
+            param.requires_grad = False
+
+    def forward(self, images):
+        features = self.feature_extractor(images)
+        x = torch.flatten(features, 1)
+        outputs = self.fc(x)
+        return features, outputs
+
+
 def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10):
     if pretrained:
         if dataset == "imagenet":
             if architecture in timm.list_models(pretrained=True):
-                model = timm.create_model(architecture, pretrained=True, num_classes= num_classes)
-                penultimate_layer_feature_vector = nn.Sequential(*list(model.children())[:-1]).eval()
-                for param in penultimate_layer_feature_vector.parameters():
-                    param.requires_grad = False
+                model = NeuralNetwork(architecture, num_classes)
                 config = resolve_data_config({}, model=model)
                 transform = create_transform(**config)
             else:
@@ -177,13 +194,13 @@ def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10)
             else:
                 raise ValueError('model is not available for Cifar100.')
 
-        return transform, model, penultimate_layer_feature_vector
+        return transform, model
 
 
 def gen_data(args, dataset, transform):
     if dataset == 'cifar10':
         all_train = CIFAR10(root='./data', train=True,download=True, transform=transform)
-        if args.train_samples!=0:
+        if args.train_samples != 0:
             all_train_, _ = torch.utils.data.random_split(all_train,
                                                             [args.train_samples, len(all_train) - args.train_samples])
 
@@ -201,7 +218,7 @@ def gen_data(args, dataset, transform):
     else:
         raise ValueError('dataset is not available.')
 
-    class_to_idx = train_set.class_to_idx
+    class_to_idx = testset.class_to_idx
     trainloader = DataLoader(train_set, batch_size=args.batch_size,
                                               shuffle=True, num_workers=2)
     valloader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=2)
@@ -221,7 +238,7 @@ def accuracy(model, dataloader, device='cpu'):
             labels = labels.to(device)
             images = images.to(device)
 
-            outputs = model(images)
+            _, outputs = model(images)
             _, preds = torch.max(outputs, 1)
             total += labels.size(0)
             correct += torch.sum(preds == labels)
@@ -235,7 +252,7 @@ def success_rate(model, target_instances, poison_label):
     model.eval()
     with torch.no_grad():
         for target in target_instances:
-            outputs = model(target)
+            _, outputs = model(target)
             _, preds = torch.max(outputs, 1)
             total += 1
             correct += torch.sum(preds == poison_label)
@@ -264,15 +281,14 @@ def get_base_target_instances(args,
     return base_instance, target_instances[:args.budgets]
 
 
-def poisoning(args, model, feature_vector, base_instance, target_instance, iters, device, beta_0=0.25, lr=0.01):
+def poisoning(args, model, base_instance, target_instance, iters, device, beta_0=0.25, lr=0.01):
     base_instance, target_instance = base_instance.to(device), target_instance.to(device)
-    feature_vector = feature_vector.to(device)
     x = base_instance
     for iter in range(iters):
         x.requires_grad = True
-        feature_vector.eval()
-        f_t = feature_vector(target_instance)
-        f_x = feature_vector(x)
+        model.eval()
+        f_t, _ = model(target_instance)
+        f_x, _ = model(x)
         # forward
         diff = f_t - f_x
         loss = torch.sum(torch.pow(diff, 2))
