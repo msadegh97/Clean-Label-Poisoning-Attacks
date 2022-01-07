@@ -1,6 +1,8 @@
 import argparse
 import copy
+import os
 import random
+import subprocess
 from typing import Dict
 
 import numpy as np
@@ -11,11 +13,15 @@ import torchvision
 from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
 from torch.utils.data import ConcatDataset, DataLoader, Dataset, TensorDataset
-from torchvision import transforms
+from torchvision import datasets, transforms
 from torchvision.datasets import CIFAR10
 from torchvision.utils import make_grid
 
 import wandb
+
+
+def git(*args):
+    return subprocess.check_call(['git'] + list(args))
 
 
 def args_parser():
@@ -61,7 +67,7 @@ def args_parser():
         '--tuning_dataset',
         type=str,
         default='cifar10',
-        choices=['cifar10', 'tinyimagenet']
+        choices=['cifar10', 'tinyimagenet', 'cat-dog']
     )
 
     # Optimizer
@@ -181,14 +187,21 @@ def gen_data(args, dataset, transform):
             all_train_, _ = torch.utils.data.random_split(all_train,
                                                             [args.train_samples, len(all_train) - args.train_samples])
 
-
         train_set, val_set = torch.utils.data.random_split(all_train_,
                                                            [int(len(all_train_) * 0.9), int(len(all_train_) * 0.1)])
         testset = CIFAR10(root='./data', train=False, download=True, transform=transform)
+
+    elif dataset == 'cat-dog':
+        git("clone", "https://github.com/ndb796/Poison-Frogs-OneShotKillAttack-PyTorch")
+        data_dir = 'Poison-Frogs-OneShotKillAttack-PyTorch/simple_dog_and_cat_dataset'
+        train_set = datasets.ImageFolder(os.path.join(data_dir, 'train'), transform)
+        val_set = datasets.ImageFolder(os.path.join(data_dir, 'val'), transform)
+        testset = datasets.ImageFolder(os.path.join(data_dir, 'test'), transform)
+
     else:
         raise ValueError('dataset is not available.')
 
-    class_to_idx = all_train.class_to_idx
+    class_to_idx = train_set.class_to_idx
     trainloader = DataLoader(train_set, batch_size=args.batch_size,
                                               shuffle=True, num_workers=2)
     valloader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=2)
@@ -228,6 +241,7 @@ def success_rate(model, target_instances, poison_label):
             correct += torch.sum(preds == poison_label)
 
         return correct / total * 100
+
 
 def get_base_target_instances(args,
                               loader: DataLoader,
@@ -284,7 +298,7 @@ def poison_data_generator(args,
 
     # creating poison dataset and dataloaders
     if args.budgets == 1:
-        poison_dataset = TensorDataset(torch.tensor(poison_instance[0]).to("cpu"),
+        poison_dataset = TensorDataset(poison_instance[0].clone().detach().to("cpu"),
                                        torch.tensor(args.budgets*[class_to_idx[poison_class_name]]))
 
     else:  # TODO add different poison instances

@@ -1,15 +1,17 @@
 import os
 
+import numpy as np
 import torch
+from torchvision.utils import make_grid
 
 from utils import *
 
 
-def fine_tuning(args, model, train_loader, validation_loader, target_instances, poison_label, early_stop=None, device='cuda'):
+def fine_tuning(args, model, train_loader, validation_loader, target_instances, poison_label, idx_to_class, early_stop=None, device='cuda', logging=False):
     param = model.get_classifier().parameters() if args.tuning_type == 'last_layer' else model.parameters()
-
     optimizer = torch.optim.SGD(param, lr=args.lr, weight_decay=5e-4)
     criterion = torch.nn.CrossEntropyLoss()
+
     if args.scheduler:
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
@@ -49,6 +51,20 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
 
 
             record_loss_val += loss.item()
+
+        # model is fooled
+        if logging:
+            if epoch == 0 or epoch % 2 == 0:
+                with torch.no_grad():
+                    if len(target_instances) == 1:
+                        instance = target_instances[0]
+                    else:
+                        instance = np.random.choice(target_instances)
+                    outputs = model(instance)
+                    _, preds = torch.max(outputs, 1)
+                    image_grid = make_grid(instance)
+                    print(f'Target Instance (predicted class name: {idx_to_class[preds.item()]})')
+                    wandb.log({f"Targeted Instances Epoch {epoch}": [wandb.Image(image_grid, caption=f"{idx_to_class[preds.item()]}")]})
 
         early_stop(record_loss_val / len(validation_loader), model)
         if early_stop.early_stop == True:
@@ -102,7 +118,11 @@ if __name__ == '__main__':
     train_loader, val_loader, test_loader, train_set, class_to_idx = gen_data(args=args, dataset=args.tuning_dataset, transform=transform)
     if args.setting == "Poison":
         # base and target instances
-        base_instance_name, target_instance_name = 'dog', 'frog'
+        if args.tuning_dataset == "cat-dog":
+            base_instance_name, target_instance_name = 'cat', 'dog'
+        else:
+            base_instance_name, target_instance_name = 'dog', 'frog'
+
         base_instance, target_instances = get_base_target_instances(args,
                                                                    test_loader,
                                                                     base_instance_name,
@@ -125,6 +145,8 @@ if __name__ == '__main__':
         # log images
         logging_images(base_instance, target_instances, poisonous_instances)
 
+        # idx to class
+        idx_to_class = {value:key for key, value in class_to_idx.items()}
         # fine tune
         fine_tuning(args=args,
                     model=model,
@@ -132,15 +154,17 @@ if __name__ == '__main__':
                     validation_loader=val_loader,
                     target_instances=target_instances,
                     poison_label=class_to_idx[base_instance_name],
+                    idx_to_class=idx_to_class,
                     early_stop=early_stop,
-                    device=device)
+                    device=device,
+                    logging=True)
 
         # get success rate
-        # success_rate = success_rate(model, target_instances, class_to_idx[base_instance_name])
-        # if args.wandb:
-        #     wandb.log({"success_rate": success_rate})
-        # else:
-        #     print(f"success_rate:{success_rate}")
+        success_rate = success_rate(model, target_instances, class_to_idx[base_instance_name])
+        if args.wandb:
+            wandb.log({"Test/success_rate": success_rate})
+        else:
+            print(f"success_rate:{success_rate}")
 
     if args.setting == 'Normal':
         fine_tuning(args=args,
