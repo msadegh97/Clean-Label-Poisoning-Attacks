@@ -82,7 +82,7 @@ def args_parser():
                         help='Maximum Iterations (default : 5000)')
     # logger
     parser.add_argument("--wandb",
-                        type=bool,
+                        type=lambda x: (str(x).lower() == 'true'),
                         default=True,
                         help='using wandb as a logger')
 
@@ -153,11 +153,14 @@ def set_random_seed(se=None):
 
 
 class NeuralNetwork(nn.Module):
-    def __init__(self, architecture, num_classes):
+    def __init__(self, dataset, architecture, num_classes):
         super().__init__()
 
         # load a pre-trained model for the feature extractor
-        model = timm.create_model(architecture, pretrained=True)
+        if dataset == "cifar100":
+            model = torch.hub.load("chenyaofo/pytorch-cifar-models", f"cifar100_{architecture}", pretrained=True)
+        else:
+            model = timm.create_model(architecture, pretrained=True)
         self.feature_extractor = nn.Sequential(*list(model.children())[:-1])
         self.fc = nn.Linear(list(model.children())[-1].in_features, num_classes)
 
@@ -174,25 +177,14 @@ class NeuralNetwork(nn.Module):
 
 def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10):
     if pretrained:
-        if dataset == "imagenet":
-            if architecture in timm.list_models(pretrained=True):
-                model = NeuralNetwork(architecture, num_classes)
-                config = resolve_data_config({}, model=model)
-                transform = create_transform(**config)
-            else:
-                raise ValueError('model is not available for imagenet.')
-
-        elif dataset == "cifar100":  # TODO checkpoint cifar 100
-            if f"cifar100_{architecture}" in torch.hub.list("chenyaofo/pytorch-cifar-models"):
-                model = torch.hub.load("chenyaofo/pytorch-cifar-models", f"cifar100_{architecture}", pretrained=True)
-                penultimate_layer_feature_vector = nn.Sequential(*list(model.children())[:-1]).eval()
-                for param in penultimate_layer_feature_vector.parameters():
-                    param.requires_grad = False
-                # mean, std from https://gist.github.com/weiaicunzai/e623931921efefd4c331622c344d8151
-                transform = transforms.Compose(
-                    [transforms.ToTensor(), transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))])
-            else:
-                raise ValueError('model is not available for Cifar100.')
+        dataset_is_valid = architecture in timm.list_models(pretrained=True) or \
+            f"cifar100_{architecture}" in torch.hub.list("chenyaofo/pytorch-cifar-models")
+        if dataset_is_valid:
+            model = NeuralNetwork(dataset, architecture, num_classes)
+            config = resolve_data_config({}, model=model)
+            transform = create_transform(**config)
+        else:
+            raise ValueError(f'model is not available for {dataset}.')
 
         return transform, model
 
@@ -209,7 +201,7 @@ def gen_data(args, dataset, transform):
         testset = CIFAR10(root='./data', train=False, download=True, transform=transform)
 
     elif dataset == 'cat-dog':
-        git("clone", "https://github.com/ndb796/Poison-Frogs-OneShotKillAttack-PyTorch")
+        # git("clone", "https://github.com/ndb796/Poison-Frogs-OneShotKillAttack-PyTorch")
         data_dir = 'Poison-Frogs-OneShotKillAttack-PyTorch/simple_dog_and_cat_dataset'
         train_set = datasets.ImageFolder(os.path.join(data_dir, 'train'), transform)
         val_set = datasets.ImageFolder(os.path.join(data_dir, 'val'), transform)
@@ -269,7 +261,7 @@ def get_base_target_instances(args,
     """ getting base and target instances based on our budget"""
     base_label, target_label = class_to_idx[base_instance_name], class_to_idx[target_instance_name]
     base_instance, target_instances = torch.empty(0), []
-    for inputs, labels in loader:  # TODO check dataset train or test
+    for inputs, labels in loader:
         for i in range(inputs.shape[0]):
             if labels[i] == base_label:
                 base_instance = inputs[i].unsqueeze(0).to(device)

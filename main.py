@@ -20,6 +20,7 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
         running_loss = 0.
         running_corrects, num_items = 0, 0
         # load a batch data of images
+
         for i, (inputs, labels) in enumerate(train_loader):
 
             inputs = inputs.to(device)
@@ -45,6 +46,7 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
         print('[Train #{}] Loss: {:.4f} Acc: {:.4f}%'.format(epoch, train_epoch_loss, train_epoch_acc))
 
         # validation
+        model.eval()
         with torch.no_grad():
             running_loss = 0.
             running_corrects = 0
@@ -80,8 +82,10 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
                     _, preds = torch.max(outputs, 1)
                     print(f'Target Instance (predicted class name: {idx_to_class[preds.item()]})')
                     image_grid = make_grid(instance)
-                    wandb.log({f"Targeted Instance Epoch {epoch}": [wandb.Image(image_grid, caption=f"{idx_to_class[preds.item()]}")]})
+                    if args.wandb:
+                        wandb.log({f"Targeted Instance Epoch {epoch}": [wandb.Image(image_grid, caption=f"{idx_to_class[preds.item()]}")]})
 
+        model.train()
         early_stop(val_epoch_loss / len(validation_loader), model)
         if early_stop.early_stop == True:
             break
@@ -136,6 +140,9 @@ if __name__ == '__main__':
     model = model.to(device)
 
     train_loader, val_loader, test_loader, train_set, class_to_idx = gen_data(args=args, dataset=args.tuning_dataset, transform=transform)
+    # idx to class
+    idx_to_class = {value:key for key, value in class_to_idx.items()}
+
     if args.setting == "Poison":
         # base and target instances
         if args.tuning_dataset == "cat-dog":
@@ -162,10 +169,9 @@ if __name__ == '__main__':
         poisonous_dataloader, poisons = poison_data_generator(args, train_set, poisonous_instances, class_to_idx, base_instance_name, device)
 
         # log images
-        logging_images(base_instance, target_instances, poisonous_instances)
+        if args.wandb:
+            logging_images(base_instance, target_instances, poisonous_instances)
 
-        # idx to class
-        idx_to_class = {value:key for key, value in class_to_idx.items()}
         # fine tune
         fine_tuning(args=args,
                     model=model,
