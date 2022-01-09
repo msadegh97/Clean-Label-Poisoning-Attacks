@@ -16,11 +16,10 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
     for epoch in range(args.epochs):
-        # training
-        running_loss = 0.
-        running_corrects, num_items = 0, 0
-        # load a batch data of images
 
+        running_loss, running_corrects, num_items = 0., 0, 0
+        # training
+        model.train()
         for i, (inputs, labels) in enumerate(train_loader):
 
             inputs = inputs.to(device)
@@ -48,9 +47,7 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
         # validation
         model.eval()
         with torch.no_grad():
-            running_loss = 0.
-            running_corrects = 0
-            num_items = 0
+            running_loss, running_corrects, num_items = 0., 0, 0
 
             for inputs, labels in validation_loader:
                 inputs = inputs.to(device)
@@ -85,7 +82,6 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
                     if args.wandb:
                         wandb.log({f"Targeted Instance Epoch {epoch}": [wandb.Image(image_grid, caption=f"{idx_to_class[preds.item()]}")]})
 
-        model.train()
         early_stop(val_epoch_loss / len(validation_loader), model)
         if early_stop.early_stop == True:
             break
