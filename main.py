@@ -78,9 +78,6 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
                     _, outputs = model(instance)
                     _, preds = torch.max(outputs, 1)
                     print(f'Target Instance (predicted class name: {idx_to_class[preds.item()]})')
-                    image_grid = make_grid(instance)
-                    if args.wandb:
-                        wandb.log({f"Targeted Instance Epoch {epoch}": [wandb.Image(image_grid, caption=f"{idx_to_class[preds.item()]}")]})
 
         early_stop(val_epoch_loss / len(validation_loader), model)
         if early_stop.early_stop == True:
@@ -162,7 +159,7 @@ if __name__ == '__main__':
                                                  device=device,
                                                  iters=args.max_iter, beta_0=0.25, lr=0.01))
         # poisonous dataloader added to clean dataloader
-        poisonous_dataloader, poisons = poison_data_generator(args, train_set, poisonous_instances, class_to_idx, base_instance_name, device)
+        clean_poison_dataloader, poisonous_dataloader = poison_data_generator(args, train_set, poisonous_instances, class_to_idx, base_instance_name, device)
 
         # log images
         if args.wandb:
@@ -171,7 +168,7 @@ if __name__ == '__main__':
         # fine tune
         fine_tuning(args=args,
                     model=model,
-                    train_loader=poisonous_dataloader,
+                    train_loader=clean_poison_dataloader,
                     validation_loader=val_loader,
                     target_instances=target_instances,
                     poison_label=class_to_idx[base_instance_name],

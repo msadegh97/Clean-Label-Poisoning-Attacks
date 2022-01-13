@@ -190,22 +190,23 @@ def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10)
 
 
 def gen_data(args, dataset, transform):
+    target_transform = transforms.Lambda(lambda y: torch.tensor(y))
     if dataset == 'cifar10':
-        all_train = CIFAR10(root='./data', train=True,download=True, transform=transform)
+        all_train = CIFAR10(root='./data', train=True,download=True, transform=transform, target_transform=target_transform)
         if args.train_samples != 0:
             all_train_, _ = torch.utils.data.random_split(all_train,
                                                             [args.train_samples, len(all_train) - args.train_samples])
 
         train_set, val_set = torch.utils.data.random_split(all_train_,
                                                            [int(len(all_train_) * 0.9), int(len(all_train_) * 0.1)])
-        testset = CIFAR10(root='./data', train=False, download=True, transform=transform)
+        testset = CIFAR10(root='./data', train=False, download=True, transform=transform, target_transform=target_transform)
 
     elif dataset == 'cat-dog':
         # git("clone", "https://github.com/ndb796/Poison-Frogs-OneShotKillAttack-PyTorch")
         data_dir = 'Poison-Frogs-OneShotKillAttack-PyTorch/simple_dog_and_cat_dataset'
-        train_set = datasets.ImageFolder(os.path.join(data_dir, 'train'), transform)
-        val_set = datasets.ImageFolder(os.path.join(data_dir, 'val'), transform)
-        testset = datasets.ImageFolder(os.path.join(data_dir, 'test'), transform)
+        train_set = datasets.ImageFolder(os.path.join(data_dir, 'train'), transform, target_transform=target_transform)
+        val_set = datasets.ImageFolder(os.path.join(data_dir, 'val'), transform, target_transform=target_transform)
+        testset = datasets.ImageFolder(os.path.join(data_dir, 'test'), transform, target_transform=target_transform)
 
     else:
         raise ValueError('dataset is not available.')
@@ -314,7 +315,7 @@ def poison_data_generator(args,
                                        torch.tensor(args.budgets*[class_to_idx[poison_class_name]]))
     poison_dataloader = DataLoader(poison_dataset, batch_size=args.batch_size)
     poisonous_clean_dataloader = DataLoader(ConcatDataset([train_set, poison_dataset]),
-                                            batch_size=args.batch_size)
+                                            batch_size=args.batch_size, shuffle=True)
 
     return poisonous_clean_dataloader, poison_dataloader
 
