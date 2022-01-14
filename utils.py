@@ -60,8 +60,14 @@ def args_parser():
         '--model',
         type=str,
         default='resnet18',
-        choices=['resnet18', 'resnet50', 'mobilenetv2_100', 'inception_v4', 'efficientnet_b0', 'vit_base_patch16_224',
+        choices=['resnet18', 'resnet50', 'mobilenetv2_100', 'inception_v3', 'efficientnet_b0', 'vit_base_patch16_224',
                 'resnet20', 'resnet56', 'vgg11_bn', 'vgg16_bn', 'mobilenetv2_x1_4']
+    )
+    parser.add_argument(
+      '--beta',
+      type=int,
+      default=0.25,
+      help='beta parameter for FC attack'
     )
     parser.add_argument(
         '--tuning_dataset',
@@ -127,10 +133,15 @@ def args_parser():
                         default=None,
                         help="random seed")
     parser.add_argument("--early_stop",
-                        type= bool,
-                        default= True,
-                        help="early stopping"
+                        default= False,
+			action='store_true',
+                        help="activate early stopping when calling"
                         )
+    parser.add_argument("--patience",
+			type=int,
+    			default=100,
+			help="early stop patience"
+    )
     parser.add_argument("--checkpoints_path",
                         type=str,
                         default='/home/mlcysec_team003/Clean-Label-Poisoning-Attacks/checkpoints/',
@@ -274,7 +285,7 @@ def get_base_target_instances(args,
     return base_instance, target_instances[:args.budgets]
 
 
-def poisoning(args, model, base_instance, target_instance, iters, device, beta_0=0.25, lr=0.01):
+def poisoning(args, model, base_instance, target_instance, iters, device, lr=0.01):
     base_instance, target_instance = base_instance.to(device), target_instance.to(device)
     x = base_instance
     for iter in range(iters):
@@ -292,7 +303,7 @@ def poisoning(args, model, base_instance, target_instance, iters, device, beta_0
         x_hat -= lr*x.grad
         # backward
         beta = beta_0 * list(model.children())[-1].in_features**2/(base_instance.shape[1:].numel())**2
-        x = (x_hat + lr*beta*base_instance) / (1 + lr*beta)
+        x = (x_hat + lr*args.beta*base_instance) / (1 + lr*args.beta)
         x = x.detach()
     return x
 

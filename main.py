@@ -113,7 +113,7 @@ if __name__ == '__main__':
     #set seed
     set_random_seed(se=args.seed)
     if args.early_stop:
-        early_stop = EarlyStopping(patience=15, min_delta=0)
+        early_stop = EarlyStopping(patience=args.patience, min_delta=0)
 
     # wandb
     os.environ['TORCH_HOME'] = args.checkpoints_path
@@ -157,7 +157,7 @@ if __name__ == '__main__':
                                                  base_instance,
                                                  target_instance,
                                                  device=device,
-                                                 iters=args.max_iter, beta_0=0.25, lr=0.01))
+                                                 iters=args.max_iter, lr=0.01))
         # poisonous dataloader added to clean dataloader
         clean_poison_dataloader, poisonous_dataloader = poison_data_generator(args, train_set, poisonous_instances, class_to_idx, base_instance_name, device)
 
