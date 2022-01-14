@@ -64,8 +64,8 @@ def args_parser():
                 'resnet20', 'resnet56', 'vgg11_bn', 'vgg16_bn', 'mobilenetv2_x1_4']
     )
     parser.add_argument(
-      '--beta',
-      type=int,
+      '--beta_0',
+      type=float,
       default=0.25,
       help='beta parameter for FC attack'
     )
@@ -302,8 +302,8 @@ def poisoning(args, model, base_instance, target_instance, iters, device, lr=0.0
         x_hat = x.clone()
         x_hat -= lr*x.grad
         # backward
-        beta = beta_0 * list(model.children())[-1].in_features**2/(base_instance.shape[1:].numel())**2
-        x = (x_hat + lr*args.beta*base_instance) / (1 + lr*args.beta)
+        beta = args.beta_0 * list(model.children())[-1].in_features**2/(base_instance.shape[1:].numel())**2
+        x = (x_hat + lr*beta*base_instance) / (1 + lr*beta)
         x = x.detach()
     return x
 
