@@ -157,7 +157,7 @@ if __name__ == '__main__':
                                                  base_instance,
                                                  target_instance,
                                                  device=device,
-                                                 iters=args.max_iter, lr=0.01))
+                                                 iters=args.max_iter, lr=0.01, opacity=args.opacity))
         # poisonous dataloader added to clean dataloader
         clean_poison_dataloader, poisonous_dataloader = poison_data_generator(args, train_set, poisonous_instances, class_to_idx, base_instance_name, device)
 

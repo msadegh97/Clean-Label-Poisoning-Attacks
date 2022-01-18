@@ -27,60 +27,53 @@ def git(*args):
 def args_parser():
     parser = argparse.ArgumentParser(description='PyTorch')
 
-    parser.add_argument(
-        '--dataset',
-        type=str,
-        default='imagenet',
-        choices=['imagenet', 'cifar100'],
-        help='Select dataset'
-    )
+    parser.add_argument( '--dataset',
+                        type=str,
+                        default='imagenet',
+                        choices=['imagenet', 'cifar100'],
+                        help='Select dataset')
 
-    parser.add_argument(
-        '--budgets',
-        type=int,
-        default=5,
-        choices=[1, 5, 10, 25, 50, 100],
-        help='number of poison sample'
-    )
+    parser.add_argument('--budgets',
+                        type=int,
+                        default=5,
+                        choices=[1, 5, 10, 25, 50, 100],
+                        help='number of poison sample')
 
-    parser.add_argument(
-        '--watermark',
-        type=bool,
-        default= False,
-        help='watermarking'
-    )
+    parser.add_argument('--watermark',
+                        type=bool,
+                        default= False,
+                        help='watermarking')
 
-    parser.add_argument(
-        '--tuning_type',
-        type=str,
-        default='last_layer',
-        choices=['last_layer', 'all_layer', 'from_scratch']
-    )
-    parser.add_argument(
-        '--model',
-        type=str,
-        default='resnet18',
-        choices=['resnet18', 'resnet50', 'mobilenetv2_100', 'inception_v3', 'efficientnet_b0', 'vit_base_patch16_224',
-                'resnet20', 'resnet56', 'vgg11_bn', 'vgg16_bn', 'mobilenetv2_x1_4']
-    )
-    parser.add_argument(
-      '--beta_0',
-      type=float,
-      default=0.25,
-      help='beta parameter for FC attack'
-    )
-    parser.add_argument(
-        '--tuning_dataset',
-        type=str,
-        default='cifar10',
-        choices=['cifar10', 'tinyimagenet', 'cat-dog']
-    )
+    parser.add_argument('--tuning_type',
+                        type=str,
+                        default='last_layer',
+                        choices=['last_layer', 'all_layer', 'from_scratch'])
 
+    parser.add_argument('--model',
+                        type=str,
+                        default='resnet18',
+                        choices=['resnet18', 'resnet50', 'mobilenetv2_100', 'inception_v3', 'efficientnet_b0', 'vit_base_patch16_224',
+                                'resnet20', 'resnet56', 'vgg11_bn', 'vgg16_bn', 'mobilenetv2_x1_4'])
+
+    parser.add_argument('--beta_0',
+                        type=float,
+                        default=0.25,
+                        help='beta parameter for FC attack')
+
+    parser.add_argument('--tuning_dataset',
+                        type=str,
+                        default='cifar10',
+                        choices=['cifar10', 'tinyimagenet', 'cat-dog'])
     # Optimizer
     parser.add_argument('--lr',
                         type=float,
                         default=0.001,
                         help='Initial LR (0.001)')
+
+    parser.add_argument('--opacity',
+                        type=float,
+                        default=0.,
+                        help='add a low-opacity watermark of the target instance to the poisoning instance range(0, 1)')
 
     parser.add_argument('--max_iter',
                         type=int,
@@ -123,29 +116,31 @@ def args_parser():
                         help="batch_size")
 
     parser.add_argument("--setting",
-                         type=str,
-                         default = 'Normal',
-                         choices=['Normal', 'Poison'],
+                        type=str,
+                        default = 'Normal',
+                        choices=['Normal', 'Poison'],
                         help='finetune by normal or poison data')
 
     parser.add_argument("--seed",
                         type=int,
                         default=None,
                         help="random seed")
+
     parser.add_argument("--early_stop",
                         default= False,
-			action='store_true',
-                        help="activate early stopping when calling"
-                        )
+			            action='store_true',
+                        help="activate early stopping when calling")
+
     parser.add_argument("--patience",
-			type=int,
-    			default=100,
-			help="early stop patience"
-    )
+                        type=int,
+                        default=100,
+                        help="early stop patience")
+
     parser.add_argument("--checkpoints_path",
                         type=str,
                         default='/home/mlcysec_team003/Clean-Label-Poisoning-Attacks/checkpoints/',
                         help="where to save checkpoints path")
+
     parser.add_argument("--train_samples",
                         type = int,
                         default= 5000,
@@ -164,7 +159,7 @@ def set_random_seed(se=None):
 
 
 class NeuralNetwork(nn.Module):
-    def __init__(self, dataset, architecture, num_classes):
+    def __init__(self, args, dataset, architecture, num_classes):
         super().__init__()
 
         # load a pre-trained model for the feature extractor
@@ -176,8 +171,9 @@ class NeuralNetwork(nn.Module):
         self.fc = nn.Linear(list(model.children())[-1].in_features, num_classes)
 
         # fix the pre-trained network
-        for param in self.feature_extractor.parameters():
-            param.requires_grad = False
+        if args.tuning_type == 'last_layer':
+            for param in self.feature_extractor.parameters():
+                param.requires_grad = False
 
     def forward(self, images):
         features = self.feature_extractor(images)
@@ -191,7 +187,7 @@ def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10)
         dataset_is_valid = architecture in timm.list_models(pretrained=True) or \
             f"cifar100_{architecture}" in torch.hub.list("chenyaofo/pytorch-cifar-models")
         if dataset_is_valid:
-            model = NeuralNetwork(dataset, architecture, num_classes)
+            model = NeuralNetwork(args, dataset, architecture, num_classes)
             config = resolve_data_config({}, model=model)
             transform = create_transform(**config)
         else:
@@ -285,7 +281,7 @@ def get_base_target_instances(args,
     return base_instance, target_instances[:args.budgets]
 
 
-def poisoning(args, model, base_instance, target_instance, iters, device, lr=0.01):
+def poisoning(args, model, base_instance, target_instance, iters, device, lr=0.01, opacity=0.):
     base_instance, target_instance = base_instance.to(device), target_instance.to(device)
     x = base_instance
     for iter in range(iters):
@@ -305,6 +301,11 @@ def poisoning(args, model, base_instance, target_instance, iters, device, lr=0.0
         beta = args.beta_0 * list(model.children())[-1].in_features**2/(base_instance.shape[1:].numel())**2
         x = (x_hat + lr*beta*base_instance) / (1 + lr*beta)
         x = x.detach()
+
+    # watermarking trick
+    if opacity:
+        watermark = opacity * target_instance
+        x = torch.clamp((x + watermark), x.min(), x.max())
     return x
 
 
