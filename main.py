@@ -78,10 +78,10 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
                     _, outputs = model(instance)
                     _, preds = torch.max(outputs, 1)
                     print(f'Target Instance (predicted class name: {idx_to_class[preds.item()]})')
-
-        early_stop(val_epoch_loss / len(validation_loader), model)
-        if early_stop.early_stop == True:
-            break
+        if args.early_stop:
+            early_stop(val_epoch_loss / len(validation_loader), model)
+            if early_stop.early_stop == True:
+                break
 
         # logging to wandb
         to_log = {"train_loss": train_epoch_loss,
@@ -114,6 +114,8 @@ if __name__ == '__main__':
     set_random_seed(se=args.seed)
     if args.early_stop:
         early_stop = EarlyStopping(patience=args.patience, min_delta=0)
+    else:
+        early_stop=None
 
     # wandb
     os.environ['TORCH_HOME'] = args.checkpoints_path
@@ -195,7 +197,8 @@ if __name__ == '__main__':
                         device=device)
 
     # test acc
-    model.load_state_dict(early_stop.best_model)
+    if args.early_stop:
+        model.load_state_dict(early_stop.best_model)
     model.eval()
     test_acc = accuracy(model, test_loader, device=device)
     if args.wandb :
