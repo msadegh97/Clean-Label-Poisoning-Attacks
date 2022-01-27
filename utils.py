@@ -138,7 +138,7 @@ def args_parser():
 
     parser.add_argument("--checkpoints_path",
                         type=str,
-                        default='/home/mlcysec_team003/Clean-Label-Poisoning-Attacks/checkpoints/',
+                        default='./checkpoints/',
                         help="where to save checkpoints path")
 
     parser.add_argument("--train_samples",
@@ -229,6 +229,7 @@ def gen_data(args, dataset, transform):
 
 
 def accuracy(model, dataloader, device='cpu'):
+    model.eval()
     correct = 0
     total = 0
     with torch.no_grad():
@@ -267,17 +268,17 @@ def get_base_target_instances(args,
                               device):
     """ getting base and target instances based on our budget"""
     base_label, target_label = class_to_idx[base_instance_name], class_to_idx[target_instance_name]
-    base_instance, target_instances = torch.empty(0), []
+    base_instance, target_instances = [], []
     for inputs, labels in loader:
         for i in range(inputs.shape[0]):
             if labels[i] == base_label:
-                base_instance = inputs[i].unsqueeze(0).to(device)
+                base_instance.append(inputs[i].unsqueeze(0).to(device))
             elif labels[i] == target_label:
                 target_instances.append(inputs[i].unsqueeze(0).to(device))
-                if len(target_instances) == args.budgets and len(base_instance) == 1:
-                    break
+#                 if len(target_instances) == args.budgets and len(base_instance) == 1:
+#                     break
 
-    return base_instance, target_instances[:args.budgets]
+    return base_instance,target_instances
 
 
 def poisoning(args, model, base_instance, target_instance, iters, device, lr=0.01, opacity=0.):

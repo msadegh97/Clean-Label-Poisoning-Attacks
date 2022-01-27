@@ -17,6 +17,11 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
 
     for epoch in range(args.epochs):
         # training
+        if args.tuning_type == 'last_layer':
+            model.eval()
+        else:
+            model.train()
+
         running_loss, running_corrects, num_items = 0., 0, 0
         if args.tuning_type == "last_layer":
             # having the penultimate feature vector of the model fixed during the training
@@ -147,7 +152,7 @@ if __name__ == '__main__':
         if args.tuning_dataset == "cat-dog":
             base_instance_name, target_instance_name = 'cat', 'dog'
         else:
-            base_instance_name, target_instance_name = 'dog', 'frog'
+            base_instance_name, target_instance_name = np.random.choice(list(idx_to_class.values()), 2,replace=False)
 
         base_instance, target_instances = get_base_target_instances(args,
                                                                    test_loader,
@@ -155,6 +160,8 @@ if __name__ == '__main__':
                                                                     target_instance_name,
                                                                     class_to_idx,
                                                                     device)
+        base_instance = base_instance[np.random.randint(0, len(base_instance))]
+        target_instances = (torch.concat(target_instances)[[np.random.randint(0, len(target_instances), args.budgets)]]).unsqueeze(dim=1)
         # generating poisonous instance
         poisonous_instances = []
         for target_instance in target_instances:
