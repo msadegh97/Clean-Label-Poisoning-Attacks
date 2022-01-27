@@ -283,7 +283,12 @@ def get_base_target_instances(args,
 
 def poisoning(args, model, base_instance, target_instance, iters, device, lr=0.01, opacity=0.):
     base_instance, target_instance = base_instance.to(device), target_instance.to(device)
-    x = base_instance
+    # watermarking
+    x = copy.deepcopy(base_instance)
+    if opacity:
+      x = opacity * target_instance + (1 - opacity) * x
+
+    # feature collision
     for iter in range(iters):
         x.requires_grad = True
         model.eval()
@@ -302,10 +307,7 @@ def poisoning(args, model, base_instance, target_instance, iters, device, lr=0.0
         x = (x_hat + lr*beta*base_instance) / (1 + lr*beta)
         x = x.detach()
 
-    # watermarking trick
-    if opacity:
-        watermark = opacity * target_instance
-        x = torch.clamp((x + watermark), x.min(), x.max())
+    x.requires_grad = False
     return x
 
 
@@ -322,7 +324,7 @@ def poison_data_generator(args,
         poison_dataset = TensorDataset(poison_instance[0].clone().detach().to("cpu"),
                                        torch.tensor(args.budgets*[class_to_idx[poison_class_name]]))
 
-    else:  # TODO add different poison instances
+    else:
         poison_dataset = TensorDataset(torch.cat(poison_instance, dim=0).to("cpu"),
                                        torch.tensor(args.budgets*[class_to_idx[poison_class_name]]))
     poison_dataloader = DataLoader(poison_dataset, batch_size=args.batch_size)

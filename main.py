@@ -16,10 +16,14 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
     for epoch in range(args.epochs):
-
-        running_loss, running_corrects, num_items = 0., 0, 0
         # training
-        model.train()
+        running_loss, running_corrects, num_items = 0., 0, 0
+        if args.tuning_type == "last_layer":
+            # having the penultimate feature vector of the model fixed during the training
+            model.eval()
+        else:
+            model.train()
+
         for i, (inputs, labels) in enumerate(train_loader):
 
             inputs = inputs.to(device)
@@ -159,7 +163,7 @@ if __name__ == '__main__':
                                                  base_instance,
                                                  target_instance,
                                                  device=device,
-                                                 iters=args.max_iter, lr=0.01, opacity=args.opacity))
+                                                 iters=args.max_iter, lr=0.1, opacity=args.opacity))
         # poisonous dataloader added to clean dataloader
         clean_poison_dataloader, poisonous_dataloader = poison_data_generator(args, train_set, poisonous_instances, class_to_idx, base_instance_name, device)
 
