@@ -159,14 +159,14 @@ def set_random_seed(se=None):
 
 
 class NeuralNetwork(nn.Module):
-    def __init__(self, args, dataset, architecture, num_classes):
+    def __init__(self, args, dataset, architecture, num_classes, pretrained):
         super().__init__()
 
         # load a pre-trained model for the feature extractor
         if dataset == "cifar100":
-            model = torch.hub.load("chenyaofo/pytorch-cifar-models", f"cifar100_{architecture}", pretrained=True)
+            model = torch.hub.load("chenyaofo/pytorch-cifar-models", f"cifar100_{architecture}", pretrained=pretrained)
         else:
-            model = timm.create_model(architecture, pretrained=True)
+            model = timm.create_model(architecture, pretrained=pretrained)
         self.feature_extractor = nn.Sequential(*list(model.children())[:-1])
         self.fc = nn.Linear(list(model.children())[-1].in_features, num_classes)
 
@@ -183,17 +183,16 @@ class NeuralNetwork(nn.Module):
 
 
 def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10):
-    if pretrained:
-        dataset_is_valid = architecture in timm.list_models(pretrained=True) or \
-            f"cifar100_{architecture}" in torch.hub.list("chenyaofo/pytorch-cifar-models")
-        if dataset_is_valid:
-            model = NeuralNetwork(args, dataset, architecture, num_classes)
-            config = resolve_data_config({}, model=model)
-            transform = create_transform(**config)
-        else:
-            raise ValueError(f'model is not available for {dataset}.')
+    dataset_is_valid = architecture in timm.list_models(pretrained=pretrained) or \
+        f"cifar100_{architecture}" in torch.hub.list("chenyaofo/pytorch-cifar-models")
+    if dataset_is_valid:
+        model = NeuralNetwork(args, dataset, architecture, num_classes, pretrained)
+        config = resolve_data_config({}, model=model)
+        transform = create_transform(**config)
+    else:
+        raise ValueError(f'model is not available for {dataset}.')
 
-        return transform, model
+    return transform, model
 
 
 def gen_data(args, dataset, transform):
