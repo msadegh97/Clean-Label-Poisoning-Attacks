@@ -220,6 +220,8 @@ def gen_data(args, dataset, transform):
         if args.train_samples != 0:
             all_train_, _ = torch.utils.data.random_split(all_train,
                                                             [args.train_samples, len(all_train) - args.train_samples])
+        else:
+            all_train_ = all_train
 
         train_set, val_set = torch.utils.data.random_split(all_train_,
                                                            [int(len(all_train_) * 0.9), int(len(all_train_) * 0.1)])
