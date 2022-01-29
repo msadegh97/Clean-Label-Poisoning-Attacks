@@ -41,7 +41,7 @@ def args_parser():
 
     parser.add_argument('--watermark',
                         type=bool,
-                        default= False,
+                        default=False,
                         help='watermarking')
 
     parser.add_argument('--tuning_type',
@@ -81,7 +81,7 @@ def args_parser():
                         help='Maximum Iterations (default : 5000)')
     # logger
     parser.add_argument("--wandb",
-                        type=lambda x: (str(x).lower() == 'true'),
+                        type=bool,
                         default=True,
                         help='using wandb as a logger')
 
@@ -96,28 +96,28 @@ def args_parser():
                         help="wandb project name")
 
     parser.add_argument("--pretrained",
-                        type = bool,
-                        default= True,
+                        type=bool,
+                        default=True,
                         help="using pretrained model")
 
     parser.add_argument("--scheduler",
-                        type = bool,
-                        default= True,
-                        help= "on/off scheduler")
+                        type=bool,
+                        default=True,
+                        help="on/off scheduler")
 
     parser.add_argument("--epochs",
-                        type = int,
+                        type=int,
                         default=200,
                         help="num of finetuning iterations")
 
     parser.add_argument("--batch_size",
-                        type= int,
-                        default= 32,
+                        type=int,
+                        default=32,
                         help="batch_size")
 
     parser.add_argument("--setting",
                         type=str,
-                        default = 'Normal',
+                        default='Normal',
                         choices=['Normal', 'Poison'],
                         help='finetune by normal or poison data')
 
@@ -127,8 +127,8 @@ def args_parser():
                         help="random seed")
 
     parser.add_argument("--early_stop",
-                        default= False,
-			            action='store_true',
+                        type=bool,
+                        default=False,
                         help="activate early stopping when calling")
 
     parser.add_argument("--patience",
@@ -142,8 +142,8 @@ def args_parser():
                         help="where to save checkpoints path")
 
     parser.add_argument("--train_samples",
-                        type = int,
-                        default= 5000,
+                        type=int,
+                        default=5000,
                         help="number of training sample")
 
     args = parser.parse_args()
@@ -182,11 +182,29 @@ class NeuralNetwork(nn.Module):
         return features, outputs
 
 
+class VIT(nn.Module):
+    def __init__(self, args, architecture, num_classes, pretrained):
+        super().__init__()
+        # load a pre-trained model for the feature extractor
+        self.model = timm.create_model(architecture, pretrained=pretrained, num_classes=num_classes)
+        self.fc = nn.Linear(self.model.head.in_features, num_classes)
+        # fix the pre-trained network
+        if args.tuning_type == 'last_layer':
+          for param in self.fc.parameters():
+              param.requires_grad = False
+
+    def forward(self, images):
+        return self.model.forward_features(images), self.model(images)
+
+
 def gen_model(args, architecture, dataset=None, pretrained=True, num_classes=10):
     dataset_is_valid = architecture in timm.list_models(pretrained=pretrained) or \
         f"cifar100_{architecture}" in torch.hub.list("chenyaofo/pytorch-cifar-models")
     if dataset_is_valid:
-        model = NeuralNetwork(args, dataset, architecture, num_classes, pretrained)
+        if architecture == "vit_base_patch16_224":
+            model = VIT(args, architecture, num_classes, pretrained)
+        else:
+            model = NeuralNetwork(args, dataset, architecture, num_classes, pretrained)
         config = resolve_data_config({}, model=model)
         transform = create_transform(**config)
     else:
@@ -257,7 +275,7 @@ def success_rate(model, target_instances, poison_label):
             total += 1
             correct += torch.sum(preds == poison_label)
 
-        return correct / total * 100
+        return correct.item() / total * 100
 
 
 def get_base_target_instances(args,
@@ -275,8 +293,6 @@ def get_base_target_instances(args,
                 base_instance.append(inputs[i].unsqueeze(0).to(device))
             elif labels[i] == target_label:
                 target_instances.append(inputs[i].unsqueeze(0).to(device))
-#                 if len(target_instances) == args.budgets and len(base_instance) == 1:
-#                     break
 
     return base_instance,target_instances
 
@@ -303,7 +319,8 @@ def poisoning(args, model, base_instance, target_instance, iters, device, lr=0.0
         x_hat = x.clone()
         x_hat -= lr*x.grad
         # backward
-        beta = args.beta_0 * list(model.children())[-1].in_features**2/(base_instance.shape[1:].numel())**2
+        feature_space_size = 768 if args.model == "vit_base_patch16_224" else list(model.children())[-1].in_features
+        beta = args.beta_0 * feature_space_size**2/(base_instance.shape[1:].numel())**2
         x = (x_hat + lr*beta*base_instance) / (1 + lr*beta)
         x = x.detach()
 

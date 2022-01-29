@@ -77,11 +77,12 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
                     if len(target_instances) == 1:
                         instance = target_instances[0]
                     else:
-                        instance = np.random.choice(target_instances)
+                        instance = target_instances[np.random.choice(range(len(target_instances)))]
 
                     _, outputs = model(instance)
                     _, preds = torch.max(outputs, 1)
                     print(f'Target Instance (predicted class name: {idx_to_class[preds.item()]})')
+
         if args.early_stop:
             early_stop(val_epoch_loss / len(validation_loader), model)
             if early_stop.early_stop == True:
@@ -101,7 +102,7 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
         else:
             print('[%d, %5d] loss: %.3f' %
                     (epoch + 1, epoch + 1, train_epoch_loss / num_items))
-            print('train acc: ', train_epoch_acc)
+            print('train acc: ', train_epoch_acc.item())
             if args.setting == "Poison":
                 print('train success rate: ', success_rate(model, target_instances, poison_label))
 
@@ -119,7 +120,7 @@ if __name__ == '__main__':
     if args.early_stop:
         early_stop = EarlyStopping(patience=args.patience, min_delta=0)
     else:
-        early_stop=None
+        early_stop = None
 
     # wandb
     os.environ['TORCH_HOME'] = args.checkpoints_path
@@ -147,16 +148,16 @@ if __name__ == '__main__':
         if args.tuning_dataset == "cat-dog":
             base_instance_name, target_instance_name = 'cat', 'dog'
         else:
-            base_instance_name, target_instance_name = np.random.choice(list(idx_to_class.values()), 2,replace=False)
+            base_instance_name, target_instance_name = np.random.choice(list(idx_to_class.values()), 2, replace=False)
 
         base_instance, target_instances = get_base_target_instances(args,
-                                                                   test_loader,
+                                                                    test_loader,
                                                                     base_instance_name,
                                                                     target_instance_name,
                                                                     class_to_idx,
                                                                     device)
         base_instance = base_instance[np.random.randint(0, len(base_instance))]
-        target_instances = (torch.concat(target_instances)[[np.random.randint(0, len(target_instances), args.budgets)]]).unsqueeze(dim=1)
+        target_instances = (torch.cat(target_instances)[[np.random.randint(0, len(target_instances), args.budgets)]]).unsqueeze(dim=1)
         # generating poisonous instance
         poisonous_instances = []
         for target_instance in target_instances:
@@ -202,18 +203,23 @@ if __name__ == '__main__':
                         early_stop=early_stop,
                         device=device)
 
-    # test acc
     if args.early_stop:
         model.load_state_dict(early_stop.best_model)
+
+    # test acc
     model.eval()
     test_acc = accuracy(model, test_loader, device=device)
+
     if args.wandb :
         wandb.log({"test_acc": test_acc})
     else:
-        print(f"test_acc:{test_acc}")
+        print(f"test_acc: {test_acc}")
 
     # save the checkpoint
     if not os.path.exists(f'./checkpoints/seed_{args.seed}'):
         os.makedirs(f'./checkpoints/seed_{args.seed}')
 
-    torch.save(model.state_dict(), f'checkpoints/seed_{args.seed}/{args.setting}_{args.dataset}_{args.tuning_dataset}_{wandb.run.name}')
+    if args.wandb:
+        torch.save(model.state_dict(), f'checkpoints/seed_{args.seed}/{args.setting}_{args.dataset}_{args.tuning_dataset}_{wandb.run.name}')
+    else:
+        torch.save(model.state_dict(), f'checkpoints/seed_{args.seed}/{args.setting}_{args.dataset}_{args.tuning_dataset}')
