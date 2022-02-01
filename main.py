@@ -18,7 +18,7 @@ def fine_tuning(args, model, train_loader, validation_loader, target_instances, 
     for epoch in range(args.epochs):
         # training
         running_loss, running_corrects, num_items = 0., 0, 0
-        if args.tuning_type == "last_layer":
+        if args.tuning_type == "last_layer" and args.setting == "Poison":
             # having the penultimate feature vector of the model fixed during the training
             model.eval()
         else:
