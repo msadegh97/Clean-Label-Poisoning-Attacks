@@ -177,8 +177,7 @@ class NeuralNetwork(nn.Module):
 
     def forward(self, images):
         features = self.feature_extractor(images)
-        x = torch.flatten(features, 1)
-        outputs = self.fc(x)
+        outputs = self.fc(features)
         return features, outputs
 
 
